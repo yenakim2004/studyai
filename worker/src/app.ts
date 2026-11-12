@@ -56,7 +56,7 @@ export const APP_REPLY = {
 } as const satisfies Record<string, { status: number; message: string }>;
 export type AppCode = keyof typeof APP_REPLY;
 
-function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
+export function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...API_HEADERS, ...extra } });
 }
 
@@ -96,12 +96,12 @@ async function readCapped(request: Request, max = MAX_BODY): Promise<Uint8Array 
 }
 
 /** JSON only: a cross-site page cannot send this content type without a preflight, and the API answers no preflight. */
-async function readJson(request: Request): Promise<{ ok: true; value: unknown } | { ok: false; response: Response }> {
+export async function readJson(request: Request, max = MAX_BODY): Promise<{ ok: true; value: unknown } | { ok: false; response: Response }> {
   const type = request.headers.get('content-type') ?? '';
   if (!/^application\/json(;|$)/i.test(type)) return { ok: false, response: refuse('expected-json') };
   const declared = Number(request.headers.get('content-length') ?? '0');
-  if (Number.isFinite(declared) && declared > MAX_BODY) return { ok: false, response: refuse('too-large') };
-  const bytes = await readCapped(request);
+  if (Number.isFinite(declared) && declared > max) return { ok: false, response: refuse('too-large') };
+  const bytes = await readCapped(request, max);
   if (!bytes) return { ok: false, response: refuse('too-large') };
   try {
     return { ok: true, value: JSON.parse(new TextDecoder().decode(bytes)) };

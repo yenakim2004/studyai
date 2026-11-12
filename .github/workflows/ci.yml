@@ -35,6 +35,8 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck:worker
       - run: pnpm test
+      - run: pnpm build:sites-server
+      - run: node scripts/verify-sites-build.mjs
       - run: pnpm scan:secrets
       - run: pnpm check:attribution
       - run: pnpm audit

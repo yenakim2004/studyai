@@ -186,13 +186,14 @@ export const SIGN_IN_OUTCOMES = [
   'plan-not-enabled',
   'superseded',
   'upstream-unavailable',
+  'file-invalid',
 ] as const;
 export type SignInOutcome = (typeof SIGN_IN_OUTCOMES)[number];
 
 /** The latest thing worth telling the user about the ChatGPT connection. */
 export type ChatGptNotice =
   | { kind: 'sign-in'; outcome: SignInOutcome; at: number }
-  | { kind: 'session-ended'; reason: 'refresh-rejected' | 'invalid-client' | 'unreadable'; at: number }
+  | { kind: 'session-ended'; reason: 'refresh-rejected' | 'refresh-indeterminate' | 'invalid-client' | 'unreadable'; at: number }
   | { kind: 'disconnected'; remoteRevoked: boolean | null; at: number };
 
 export type ChatGptPauseCode = 'usage-limit' | 'not-eligible';
@@ -208,8 +209,9 @@ export interface AiStatus {
   state: 'off' | 'ready' | 'paused';
   /** Korean sentences saying why AI cannot answer right now. Empty while ready. */
   reasons: string[];
-  /** True when this server runs under the local launcher with its seal key, so a sign-in can start here. */
+  /** True when this server is configured to connect a ChatGPT account. */
   signInAvailable: boolean;
+  connectVia?: 'file';
   connection: ChatGptConnection;
   /** Set while a started sign-in can still come back. */
   pendingUntil: number | null;

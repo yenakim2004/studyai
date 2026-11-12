@@ -1,12 +1,8 @@
 import { useSyncExternalStore } from 'react';
+import { z } from 'zod';
 import type { AiReply, AiStatus, AiTask, ChatGptModel } from '@/core/tutor/contract';
 
-/**
- * The browser's only connection to the AI server (the local Worker). Everything is same-origin: the page's CSP forbids any
- * other address. The server is optional: when the app is opened without it (plain dev server, a hosted copy), every AI
- * feature says so and the rest of the app works exactly as before. Nothing here is called until an AI screen is opened.
- * There is no sign-in to StudyAI itself: the local server trusts the app opened at its exact 127.0.0.1 address.
- */
+/** Same-origin AI transport for the local Worker and the private Sites server. Static builds replace this module. */
 
 export type AiState = { phase: 'loading' } | { phase: 'unavailable' } | { phase: 'ready'; status: AiStatus };
 
@@ -47,7 +43,7 @@ const messageOf = (body: unknown, fallback: string): string => {
   return typeof m === 'string' ? m : fallback;
 };
 
-/** Reads the status. Anything but a status from this server (no server, a hosted copy, a wrong address) means no AI here. */
+/** A static host or inaccessible API is shown as unavailable. */
 async function readStatus(): Promise<void> {
   const r = await call('/api/status');
   set(r?.status === 200 ? { phase: 'ready', status: r.body as AiStatus } : { phase: 'unavailable' });
@@ -65,7 +61,41 @@ export function refreshAi(): Promise<void> {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 export type ChatGptAction = 'disconnect' | 'forget' | 'resume' | { model: string };
 
-const NO_SERVER = 'StudyAI 서버에 연결하지 못했습니다. pnpm local로 실행한 창이 켜져 있는지 확인하세요.';
+const NO_SERVER = 'StudyAI 서버에 연결하지 못했습니다. 사이트를 새로고침하세요. 로컬 실행 중이라면 서버가 켜져 있는지 확인하세요.';
+
+const PairingDownloadSchema = z.object({ ok: z.literal(true), request: z.object({ v: z.literal('studyai-pairing/1'), pairingId: z.uuid(), expiresAt: z.number() }).passthrough() });
+const ConnectionFileSchema = z.object({
+  v: z.literal('studyai-connection/1'), pairingId: z.uuid(),
+  epk: z.object({ kty: z.literal('EC'), crv: z.literal('P-256'), x: z.string(), y: z.string() }).strict(),
+  iv: z.string(), ct: z.string(),
+}).strict();
+
+export async function createChatGptPairing(o: { account: 'current' | 'other'; forceConsent: boolean }): Promise<ActionResult> {
+  const r = await call('/api/chatgpt/pairing', { method: 'POST', body: o });
+  if (!r) return { ok: false, error: NO_SERVER };
+  const parsed = PairingDownloadSchema.safeParse(r.body);
+  if (!parsed.success) return { ok: false, error: messageOf(r.body, '연결 요청 파일을 만들지 못했습니다.') };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(parsed.data.request)], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `studyai-pairing-${parsed.data.request.pairingId.slice(0, 8)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  await refreshAi();
+  return { ok: true };
+}
+
+export async function installChatGptFile(file: File): Promise<ActionResult> {
+  if (file.size > 65_536) return { ok: false, error: '연결 파일은 64 KiB 이하여야 합니다.' };
+  let raw: unknown;
+  try { raw = JSON.parse(await file.text()); } catch { return { ok: false, error: '연결 파일을 읽지 못했습니다.' }; }
+  const parsed = ConnectionFileSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: '로그인 도구가 만든 연결 결과 파일을 선택하세요. 요청 파일은 올릴 수 없습니다.' };
+  const r = await call('/api/chatgpt/install', { method: 'POST', body: parsed.data, timeoutMs: 60_000 });
+  await refreshAi();
+  if (!r) return { ok: false, error: '연결 결과를 받지 못해 서버 상태를 다시 확인했습니다. 화면의 계정 연결 상태를 확인하세요.' };
+  return r.status === 200 ? { ok: true } : { ok: false, error: messageOf(r.body, 'ChatGPT 연결을 확인하지 못했습니다.') };
+}
 
 /** Disconnect, forget the saved account, resume after a pause, or choose a model. The server validates everything again. */
 export async function chatGptAction(action: ChatGptAction): Promise<ActionResult> {

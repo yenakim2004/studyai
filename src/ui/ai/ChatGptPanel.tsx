@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { chatGptAction, connectChatGpt, loadChatGptModels, refreshAi, useAiServer, type ActionResult } from '@/app/ai';
+import { chatGptAction, connectChatGpt, createChatGptPairing, installChatGptFile, loadChatGptModels, refreshAi, useAiServer, type ActionResult } from '@/app/ai';
 import { useToast } from '@/app/toast';
 import { noticeSentence, PAUSE_SENTENCE } from '@/core/chatgpt/messages';
 import type { AiStatus, ChatGptModel } from '@/core/tutor/contract';
@@ -24,7 +24,7 @@ export function ChatGptPanel() {
     return (
       <Callout tone="info" title="이 사본에는 AI가 없습니다">
         <p>AI 서버가 없어서 아무것도 다른 곳으로 보내지 않습니다. 읽기, 검색, 플래시카드, 노트, 모의시험, 백업은 AI 없이 모두 됩니다.</p>
-        <p className="mt-2">AI 튜터는 내 컴퓨터에서 pnpm local로 StudyAI를 실행하고 안내된 http://127.0.0.1 주소로 열었을 때만 쓸 수 있습니다.</p>
+        <p className="mt-2">AI 튜터는 ChatGPT 연결 서버가 설정된 개인 사이트 또는 내 컴퓨터에서 pnpm local로 실행한 StudyAI에서 쓸 수 있습니다.</p>
       </Callout>
     );
   }
@@ -47,7 +47,7 @@ function Connection({ status }: { status: AiStatus }) {
     if (!r.ok) setError(r.error);
     else if (done) toast.show(done, 'ok');
   };
-  const connect = (key: string, account: 'current' | 'other', forceConsent: boolean) => run(key, () => connectChatGpt({ account, forceConsent }));
+  const connect = (key: string, account: 'current' | 'other', forceConsent: boolean) => run(key, () => status.connectVia === 'file' ? createChatGptPairing({ account, forceConsent }) : connectChatGpt({ account, forceConsent }));
   const forget = () => run('forget', () => chatGptAction('forget'), '저장된 ChatGPT 계정 정보를 지웠습니다.');
 
   return (
@@ -83,10 +83,30 @@ function Connection({ status }: { status: AiStatus }) {
         </p>
       )}
 
+      {status.connectVia === 'file' && status.signInAvailable && (
+        <div className="max-w-prose rounded-lg border border-line p-4 text-sm">
+          <p className="font-medium">내 컴퓨터에서 로그인하고 이 사이트에 연결합니다.</p>
+          <ol className="mt-2 list-decimal space-y-2 pl-5">
+            <li>아래 연결 버튼을 눌러 요청 파일을 내려받습니다. 요청은 10분 동안 유효합니다.</li>
+            <li><a href="/downloads/studyai-connect.mjs" download className="text-accent underline">연결 도구 내려받기</a>를 누르고 요청 파일과 같은 폴더에 저장합니다.</li>
+            <li>Node.js 22 이상이 설치된 컴퓨터의 터미널에서 다음 명령을 실행합니다. 마지막 파일 이름은 내려받은 요청 파일 이름으로 바꾸세요.<code className="mt-1 block overflow-x-auto rounded bg-sunken p-2">node studyai-connect.mjs studyai-pairing-XXXXXXXX.json</code></li>
+            <li>터미널에 나온 주소에서 ChatGPT에 로그인한 뒤, 도구가 만든 연결 결과 파일을 아래에 올립니다.</li>
+          </ol>
+          <p className="mt-3 text-ink-2">요청 파일은 본인의 이 사이트에서 직접 내려받은 것만 사용하세요. 연결 결과는 암호화되어 있으며 이 사이트만 열 수 있습니다.</p>
+          {status.pendingUntil && <p role="status" className="mt-2">연결 파일을 기다리는 중 · {new Date(status.pendingUntil).toLocaleTimeString('ko-KR')}까지</p>}
+          <label className="mt-3 block font-medium" htmlFor="chatgpt-connection-file">암호화된 연결 결과 파일</label>
+          <input id="chatgpt-connection-file" className="mt-1 block w-full" type="file" accept=".json,application/json" disabled={busy !== undefined} onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void run('install', () => installChatGptFile(file), 'ChatGPT 연결이 완료되었습니다.');
+          }} />
+        </div>
+      )}
+
       {c.kind === 'disconnected' && status.signInAvailable && (
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" data-oai-siwc-button disabled={busy !== undefined} onClick={() => void connect('connect', 'current', false)}>
-            ChatGPT로 계속하기
+            {status.connectVia === 'file' ? 'ChatGPT 연결 요청 파일 받기' : 'ChatGPT로 계속하기'}
           </Button>
           {c.registered && (
             <>

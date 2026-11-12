@@ -36,6 +36,9 @@
     "config",
     "vite.config.ts",
     "vite.cli.config.ts",
+    "vite.sites.config.ts",
+    "drizzle.config.ts",
+    "db",
     "playwright.config.ts"
   ]
 }

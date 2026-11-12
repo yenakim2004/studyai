@@ -18,7 +18,7 @@ const serverEnv = { E2E_PORT_PREVIEW: String(PORTS.preview), E2E_PORT_WORKER: St
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  testIgnore: /sites-static\.spec\.ts/,
+  testIgnore: /sites-(?:static|chatgpt)\.spec\.ts/,
   timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -33,8 +33,8 @@ export default defineConfig({
     acceptDownloads: true,
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 } }, grep: /^(?!.*@mobile)/, testIgnore: [WORKER, GATE, DEMO, /sites-static\.spec\.ts/] },
-    { name: 'mobile', use: { ...devices['Pixel 7'], channel: 'chrome' }, grep: /@mobile/, testIgnore: [WORKER, GATE, DEMO, /sites-static\.spec\.ts/] },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 } }, grep: /^(?!.*@mobile)/, testIgnore: [WORKER, GATE, DEMO, /sites-(?:static|chatgpt)\.spec\.ts/] },
+    { name: 'mobile', use: { ...devices['Pixel 7'], channel: 'chrome' }, grep: /@mobile/, testIgnore: [WORKER, GATE, DEMO, /sites-(?:static|chatgpt)\.spec\.ts/] },
     { name: 'worker', testMatch: WORKER, use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 }, baseURL: ORIGINS.worker } },
     { name: 'gate', testMatch: GATE, use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 }, baseURL: ORIGINS.gate } },
     // The trailing slash matters: tests open pages with relative paths such as './settings'.

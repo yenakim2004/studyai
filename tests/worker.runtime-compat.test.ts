@@ -27,10 +27,10 @@ describe('code that runs in the Worker only uses options the Workers runtime sup
   });
 
   it('the ChatGPT protocol and account code import nothing from Node or Cloudflare (they run in workerd and in tests)', () => {
-    for (const f of [...sources('src/core/chatgpt'), 'worker/src/chatgpt.ts', 'worker/src/loopback.ts']) expect(readFileSync(f, 'utf8'), f).not.toMatch(/from\s+['"](node:|cloudflare:)/);
+    for (const f of [...sources('src/core/chatgpt'), ...sources('worker/src/hosted'), 'worker/src/seal.ts', 'worker/src/chatgpt.ts', 'worker/src/loopback.ts']) expect(readFileSync(f, 'utf8'), f).not.toMatch(/from\s+['"](node:|cloudflare:)/);
   });
 
   it('OpenAI addresses are fixed constants: no endpoint comes from the environment in production code', () => {
-    for (const f of [...sources('src/core/chatgpt'), 'worker/src/chatgpt.ts', 'worker/src/do.ts', 'worker/src/index.ts']) expect(readFileSync(f, 'utf8'), f).not.toMatch(/OPENAI_STUB|OPENAI_BASE|env\.\w*OPENAI/);
+    for (const f of [...sources('src/core/chatgpt'), ...sources('worker/src/hosted'), 'worker/src/sites.ts', 'worker/src/chatgpt.ts', 'worker/src/do.ts', 'worker/src/index.ts']) expect(readFileSync(f, 'utf8'), f).not.toMatch(/OPENAI_STUB|OPENAI_BASE|env\.\w*OPENAI/);
   });
 });

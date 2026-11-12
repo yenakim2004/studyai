@@ -12,6 +12,7 @@ export const API = 'https://api.openai.com';
 const PLAN_SCOPE = 'chatgpt.tokens.use.direct';
 
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
+const HANG = Symbol('hang');
 const json = (status, value, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json', ...headers } });
 
 export function createFakeOpenAi(opts = {}) {
@@ -26,8 +27,14 @@ export function createFakeOpenAi(opts = {}) {
     expiresIn: 3600,
     /** Seconds since the epoch, or null. Sent as `earliest_refresh_at` on every grant. */
     earliestRefreshAt: null,
-    /** 'ok' | 'terminal' | 'invalid-client' | 'transient', for the next refresh only (then back to 'ok'). */
+    /**
+     * For the next refresh only (then back to 'ok'). 'transient' is a 503 before anything rotates; 'rate-limited' a 429 and
+     * 'rejected' a non-terminal 400, both before rotation. The 'rotate-then-*' answers rotate upstream first, then hang until
+     * the caller aborts, answer 504, or answer a 200 nobody can parse.
+     */
     nextRefresh: 'ok',
+    /** Lifetime of each ID token, from its `iat`. */
+    idTokenTtlS: 600,
     /** 'ok' | 'invalid-grant' | 'invalid-client' | 'transient', for the next code exchange only. */
     nextExchange: 'ok',
     models: [
@@ -47,6 +54,7 @@ export function createFakeOpenAi(opts = {}) {
   const accessTokens = new Map();
   const log = [];
   const holds = new Map();
+  let reused = 0;
   let clients = 0;
   let tokens = 0;
 
@@ -73,7 +81,7 @@ export function createFakeOpenAi(opts = {}) {
   function idToken(clientId, nonce, account) {
     const iat = Math.floor(now() / 1000);
     const header = b64u(JSON.stringify({ alg: 'RS256', kid, typ: 'JWT' }));
-    const payload = b64u(JSON.stringify({ iss: AUTH, aud: clientId, sub: account.sub, email: account.email, nonce, iat, exp: iat + 600 }));
+    const payload = b64u(JSON.stringify({ iss: AUTH, aud: clientId, sub: account.sub, email: account.email, nonce, iat, exp: iat + behaviour.idTokenTtlS }));
     const sig = sign('sha256', Buffer.from(`${header}.${payload}`), privateKey);
     return `${header}.${payload}.${b64u(sig)}`;
   }
@@ -115,11 +123,16 @@ export function createFakeOpenAi(opts = {}) {
   }
 
   /** Upstream acts at once; only the answer is held. That is the case that matters: rotated upstream, not yet seen here. */
-  async function token(form) {
+  async function token(form, signal) {
     const kind = form.get('grant_type') === 'authorization_code' ? 'exchange' : 'refresh';
     const answer = tokenAnswer(form);
     await pass(kind);
-    return answer;
+    if (answer !== HANG) return answer;
+    return new Promise((_, reject) => {
+      const cut = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+      if (signal?.aborted) cut();
+      else signal?.addEventListener('abort', cut, { once: true });
+    });
   }
 
   function tokenAnswer(form) {
@@ -138,17 +151,28 @@ export function createFakeOpenAi(opts = {}) {
     }
     if (form.get('grant_type') === 'refresh_token') {
       const presented = form.get('refresh_token') ?? '';
-      log.push({ kind: 'refresh', clientId: form.get('client_id'), token: presented });
+      const entry = { kind: 'refresh', clientId: form.get('client_id'), token: presented };
+      log.push(entry);
       const answer = behaviour.nextRefresh;
       behaviour.nextRefresh = 'ok';
       if (answer === 'transient') return json(503, { error: 'temporarily_unavailable' });
+      if (answer === 'rate-limited') return json(429, { error: 'rate_limited' });
+      if (answer === 'rejected') return json(400, { error: 'invalid_request' });
       if (answer === 'invalid-client') return json(401, { error: 'invalid_client' });
       const r = refreshTokens.get(presented);
       if (answer === 'terminal' || !r || r.clientId !== form.get('client_id')) return json(400, { error: 'invalid_grant' });
-      if (r.state === 'used') return json(400, { error: 'refresh_token_reused' });
+      if (r.state === 'used') {
+        reused += 1;
+        return json(400, { error: 'refresh_token_reused' });
+      }
       if (r.state === 'revoked') return json(400, { error: 'invalid_grant' });
       r.state = 'used';
-      return json(200, grant(r.clientId, r.account, r.scope));
+      const body = grant(r.clientId, r.account, r.scope);
+      entry.rotatedTo = body.refresh_token;
+      if (answer === 'rotate-then-hang') return HANG;
+      if (answer === 'rotate-then-504') return json(504, { error: 'gateway_timeout' });
+      if (answer === 'rotate-then-garbage') return new Response('{"access_token": tr', { status: 200, headers: { 'content-type': 'application/json' } });
+      return json(200, body);
     }
     return json(400, { error: 'unsupported_grant_type' });
   }
@@ -199,7 +223,7 @@ export function createFakeOpenAi(opts = {}) {
     if (u.origin === AUTH && u.pathname === '/.well-known/openid-configuration')
       return json(200, { issuer: AUTH, jwks_uri: `${AUTH}/.well-known/jwks.json`, revocation_endpoint: `${AUTH}/api/accounts/oauth/revoke`, id_token_signing_alg_values_supported: ['RS256'] });
     if (u.origin === AUTH && u.pathname === '/.well-known/jwks.json') return json(200, { keys: [jwk] });
-    if (u.origin === AUTH && u.pathname === '/api/accounts/oauth/token' && method === 'POST') return token(new URLSearchParams(init.body ?? ''));
+    if (u.origin === AUTH && u.pathname === '/api/accounts/oauth/token' && method === 'POST') return token(new URLSearchParams(init.body ?? ''), init.signal);
     if (u.origin === AUTH && u.pathname === '/api/accounts/oauth/revoke' && method === 'POST') {
       const form = new URLSearchParams(init.body ?? '');
       log.push({ kind: 'revoke', clientId: form.get('client_id'), token: form.get('token') });
@@ -227,6 +251,10 @@ export function createFakeOpenAi(opts = {}) {
     log,
     count: (kind) => log.filter((e) => e.kind === kind).length,
     refreshTokenState: (t) => refreshTokens.get(t)?.state ?? null,
+    /** Every refresh token value presented for revocation, in order. */
+    revoked: () => log.filter((e) => e.kind === 'revoke').map((e) => e.token),
+    /** How many refreshes presented an already-rotated token. Zero means no send was ever repeated. */
+    reused: () => reused,
     /** Every access token issued so far stops working, as after an upstream revocation. */
     invalidateAccess: () => {
       for (const a of accessTokens.values()) a.expiresAt = 0;
@@ -245,7 +273,7 @@ export async function serveFakeOpenAi(fake, req, res) {
   const url = req.url ?? '';
   if (url === '/__oai/log') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(fake.log.map(({ token: _t, body, ...rest }) => ({ ...rest, ...(body ? { body: { model: body.model, store: body.store, stream: body.stream, keys: Object.keys(body).sort() } } : {}) }))));
+    res.end(JSON.stringify(fake.log.map(({ token: _t, rotatedTo: _r, body, ...rest }) => ({ ...rest, ...(body ? { body: { model: body.model, store: body.store, stream: body.stream, keys: Object.keys(body).sort() } } : {}) }))));
     return true;
   }
   const m = /^\/oai-(auth|api)(\/.*)$/.exec(url);

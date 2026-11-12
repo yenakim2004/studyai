@@ -21,6 +21,7 @@
     "build:sites": "tsc -b && vite build --mode sites",
     "preview:sites": "vite preview --mode sites --host 127.0.0.1 --port 4174 --strictPort",
     "test:e2e:sites": "playwright test -c playwright.sites.config.ts",
+    "test:e2e:sites-server": "pnpm build:sites-server && playwright test -c playwright.sites-server.config.ts",
     "preview": "vite preview",
     "preview:demo": "vite preview --mode demo",
     "typecheck": "tsc -b --noEmit",
@@ -35,7 +36,9 @@
     "types:worker": "wrangler types --strict-vars=false",
     "typecheck:worker": "pnpm types:worker && tsc -p tsconfig.worker.json",
     "local": "node scripts/local.mjs",
-    "worker:dev": "pnpm local"
+    "worker:dev": "pnpm local",
+    "db:generate": "drizzle-kit generate",
+    "build:sites-server": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && pnpm cli:build && tsc -b && vite build -c vite.sites.config.ts"
   },
   "engines": {
     "node": ">=22"
@@ -83,6 +86,9 @@
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.3",
-    "wrangler": "4.149.0"
+    "wrangler": "4.149.0",
+    "drizzle-kit": "0.31.10",
+    "drizzle-orm": "0.45.2",
+    "@cloudflare/vite-plugin": "1.37.1"
   }
 }

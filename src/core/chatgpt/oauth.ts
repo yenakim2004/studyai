@@ -1,4 +1,4 @@
-import { createLocalJWKSet, errors as joseErrors, jwtVerify, type JSONWebKeySet, type JWSAlgorithm } from 'jose';
+import { createLocalJWKSet, decodeJwt, errors as joseErrors, jwtVerify, type JSONWebKeySet, type JWSAlgorithm } from 'jose';
 import { z } from 'zod';
 
 export const ISSUER = 'https://auth.openai.com';
@@ -23,8 +23,8 @@ const ALLOWED_ID_TOKEN_ALGS: readonly JWSAlgorithm[] = ['RS256', 'RS384', 'RS512
 const TERMINAL_REFRESH_CODES = new Set(['invalid_grant', 'invalid_refresh_token', 'token_expired', 'refresh_token_expired', 'refresh_token_invalidated', 'refresh_token_reused']);
 
 const MAX_TOKEN_CHARS = 16 * 1024;
-const IssuedClientIdSchema = z.string().regex(/^oaiapp_[A-Za-z0-9_-]{1,200}$/).brand<'IssuedClientId'>();
-const HostIdSchema = z
+export const IssuedClientIdSchema = z.string().regex(/^oaiapp_[A-Za-z0-9_-]{1,200}$/).brand<'IssuedClientId'>();
+export const HostIdSchema = z
   .string()
   .regex(/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   .brand<'HostId'>();
@@ -36,8 +36,8 @@ const RedirectUriSchema = z
     return port !== undefined && Number(port) <= 65_535;
   })
   .brand<'LoopbackRedirectUri'>();
-const AccessTokenSchema = z.string().min(1).max(MAX_TOKEN_CHARS).brand<'AccessToken'>();
-const RefreshTokenSchema = z.string().min(1).max(MAX_TOKEN_CHARS).brand<'RefreshToken'>();
+export const AccessTokenSchema = z.string().min(1).max(MAX_TOKEN_CHARS).brand<'AccessToken'>();
+export const RefreshTokenSchema = z.string().min(1).max(MAX_TOKEN_CHARS).brand<'RefreshToken'>();
 const SubjectSchema = z.string().min(1).max(255).brand<'Subject'>();
 
 /** `oaiapp_…`, as issued on the new-registration callback. Never `dynamic_agent_client`. */
@@ -346,7 +346,7 @@ export function callbackClientId(mode: ClientMode, returned: string | null): Iss
   return returned === null || returned === mode.clientId ? mode.clientId : null;
 }
 
-/** A token-endpoint success, parsed. No ID token: it is verified once at sign-in and never kept or sent anywhere. */
+/** A token-endpoint success, parsed. No ID token: it is verified at sign-in and never stored; it crosses once, encrypted, to the user's own host. */
 export interface TokenGrant {
   accessToken: AccessToken;
   /** Required on exchange and on every refresh: a refresh without a replacement is an invalid response, never a reuse. */
@@ -368,8 +368,12 @@ export type TokenFailure =
   | { kind: 'invalid-client' }
   /** Any other 4xx. Not proof the credentials are dead, so they are kept; the same request is not repeated. */
   | { kind: 'rejected'; status: number; code: string | null }
-  /** Network, timeout, abort, 429, 5xx or a redirect. Credentials are kept. */
-  | { kind: 'transient' }
+  /**
+   * Network, timeout, abort, 429, 5xx or a redirect. Credentials are kept. `spent` says whether the upstream may have acted:
+   * 'no' only for a complete 3xx or 429 answer; 'unknown' for a cut, a network failure or a 5xx, since a gateway error can
+   * follow a backend commit. A rotating refresh token whose send is 'unknown' must never be sent again.
+   */
+  | { kind: 'transient'; spent: 'no' | 'unknown' }
   /** A 2xx whose body we cannot trust (not bearer, no refresh token, no scope on exchange, bad numbers). */
   | { kind: 'invalid-response' };
 export type ExchangeFailure = Exclude<TokenFailure, { kind: 'terminal' }>;
@@ -424,7 +428,7 @@ async function tokenRequest<F extends TokenFailure>(
   classify: (code: string | null, status: number) => F,
   now: number,
   signal: AbortSignal,
-): Promise<TokenAnswer<F | { kind: 'transient' } | { kind: 'invalid-response' }>> {
+): Promise<TokenAnswer<F | Extract<TokenFailure, { kind: 'transient' | 'invalid-response' }>>> {
   const r = await sendBounded(
     http,
     {
@@ -435,8 +439,11 @@ async function tokenRequest<F extends TokenFailure>(
     },
     { signal, timeoutMs: OAUTH_TIMEOUT_MS, maxBytes: TOKEN_BODY_BYTES },
   );
-  if (r.kind !== 'response') return { ok: false, failure: { kind: r.kind === 'too-large' ? 'invalid-response' : 'transient' }, orphan: null };
-  if (r.status === 429 || r.status >= 500) return { ok: false, failure: { kind: 'transient' }, orphan: null };
+  if (r.kind === 'too-large') return { ok: false, failure: { kind: 'invalid-response' }, orphan: null };
+  if (r.kind === 'redirect') return { ok: false, failure: { kind: 'transient', spent: 'no' }, orphan: null };
+  if (r.kind !== 'response') return { ok: false, failure: { kind: 'transient', spent: 'unknown' }, orphan: null };
+  if (r.status === 429) return { ok: false, failure: { kind: 'transient', spent: 'no' }, orphan: null };
+  if (r.status >= 500) return { ok: false, failure: { kind: 'transient', spent: 'unknown' }, orphan: null };
   const json = parseJson(r.text);
   if (r.status < 200 || r.status >= 300) {
     const err = OAuthErrorSchema.safeParse(json);
@@ -498,12 +505,15 @@ export const hasPlanScope = (scopes: readonly string[]): boolean => scopes.inclu
 export interface VerifiedIdentity {
   subject: Subject;
   email: string | null;
+  /** The signed `iat`, in epoch ms. */
+  issuedAt: number;
 }
 
 export type IdTokenProblem =
   | 'bad-signature'
   | 'wrong-issuer'
   | 'wrong-audience'
+  /** Past `exp`, or for a transferred token, signed outside the pairing's window. */
   | 'expired'
   | 'nonce-mismatch'
   | 'malformed'
@@ -542,6 +552,7 @@ const PublicJwkSchema = z.object({
 const JwksSchema = z.object({ keys: z.array(z.unknown()).max(100) });
 const IdClaimsSchema = z.object({
   sub: SubjectSchema,
+  iat: z.number(),
   nonce: z.string(),
   aud: z.union([z.string(), z.array(z.string())]),
   azp: z.unknown().optional(),
@@ -555,6 +566,7 @@ interface Metadata {
   algorithms: JWSAlgorithm[];
 }
 type Fetched<T> = { ok: true; value: T } | { ok: false; problem: 'keys-unavailable' | 'directory-invalid' };
+export type IdTokenVerdict = { ok: true; identity: VerifiedIdentity } | { ok: false; problem: IdTokenProblem };
 
 async function getJson(http: OutboundFetch, url: string, signal: AbortSignal): Promise<{ ok: true; json: unknown } | { ok: false }> {
   const r = await sendBounded(http, { url, method: 'GET', headers: { accept: 'application/json' } }, { signal, timeoutMs: OAUTH_TIMEOUT_MS, maxBytes: DIRECTORY_BODY_BYTES });
@@ -591,12 +603,39 @@ export class OpenAiDirectory {
     return m.ok ? { ok: true, value: m.value.revocationEndpoint } : m;
   }
 
-  /** Checks signature, issuer, audience (the issued client id), expiry and nonce, then reads `sub` and `email`. */
-  async verifyIdToken(
+  /** Checks signature, issuer, audience (the issued client id), expiry and nonce, then reads `sub`, `email` and `iat`. */
+  verifyIdToken(idToken: string, expect: { clientId: IssuedClientId; nonce: string }, signal: AbortSignal): Promise<IdTokenVerdict> {
+    return this.#verify(idToken, expect, new Date(this.#now()), signal);
+  }
+
+  /**
+   * For an ID token that crossed from the user's laptop to their host inside a sealed connection file. Signature, issuer,
+   * audience and nonce are checked as strictly as `verifyIdToken`, but expiry is judged at the token's own signed `iat`,
+   * and that `iat` must fall in `issuedWithin` (epoch ms, inclusive): the pairing's creation and expiry, widened by the
+   * caller for clock skew if it wants any. Freshness comes from the single-use nonce and the short pairing, not from `exp`.
+   * The unverified `iat` only picks the verification time; the window is checked against the verified claim.
+   */
+  async verifyTransferredIdToken(
     idToken: string,
-    expect: { clientId: IssuedClientId; nonce: string },
-    signal: AbortSignal,
-  ): Promise<{ ok: true; identity: VerifiedIdentity } | { ok: false; problem: IdTokenProblem }> {
+    expect: { clientId: IssuedClientId; nonce: string; issuedWithin: readonly [fromMs: number, toMs: number] },
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<IdTokenVerdict> {
+    const [from, to] = expect.issuedWithin;
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) return { ok: false, problem: 'expired' };
+    let claimedIat: unknown;
+    try {
+      claimedIat = decodeJwt(idToken).iat;
+    } catch {
+      return { ok: false, problem: 'malformed' };
+    }
+    if (typeof claimedIat !== 'number' || !Number.isFinite(claimedIat)) return { ok: false, problem: 'malformed' };
+    const verdict = await this.#verify(idToken, expect, new Date(claimedIat * 1000), signal);
+    if (!verdict.ok) return verdict;
+    const at = verdict.identity.issuedAt;
+    return at >= from && at <= to ? verdict : { ok: false, problem: 'expired' };
+  }
+
+  async #verify(idToken: string, expect: { clientId: IssuedClientId; nonce: string }, currentDate: Date, signal: AbortSignal): Promise<IdTokenVerdict> {
     const metadata = await this.#loadMetadata(signal);
     if (!metadata.ok) return metadata;
     let keys = await this.#loadKeys(metadata.value, signal, false);
@@ -608,7 +647,7 @@ export class OpenAiDirectory {
         algorithms: metadata.value.algorithms,
         requiredClaims: ['sub', 'exp', 'iat', 'nonce'],
         clockTolerance: CLOCK_TOLERANCE_S,
-        currentDate: new Date(this.#now()),
+        currentDate,
       });
     let payload: unknown;
     try {
@@ -631,7 +670,7 @@ export class OpenAiDirectory {
     const several = Array.isArray(c.aud) && c.aud.length > 1;
     if ((several || c.azp !== undefined) && c.azp !== expect.clientId) return { ok: false, problem: 'wrong-audience' };
     const email = EmailSchema.safeParse(c.email);
-    return { ok: true, identity: { subject: c.sub, email: email.success ? email.data : null } };
+    return { ok: true, identity: { subject: c.sub, email: email.success ? email.data : null, issuedAt: Math.round(c.iat * 1000) } };
   }
 
   async #loadMetadata(signal: AbortSignal): Promise<Fetched<Metadata>> {
@@ -671,7 +710,8 @@ export type SignInFailure =
   | { kind: 'plan-not-granted'; identity: VerifiedIdentity };
 
 export type SignInOutcome =
-  | { ok: true; clientId: IssuedClientId; identity: VerifiedIdentity; grant: GrantedTokens }
+  /** `idToken` is the verified token as received, for a caller that hands the grant to another host to re-verify. */
+  | { ok: true; clientId: IssuedClientId; identity: VerifiedIdentity; grant: GrantedTokens; idToken: string }
   /** `orphan` is a refresh token that was issued but not accepted. The caller revokes it; nothing else holds it. */
   | { ok: false; failure: SignInFailure; orphan: RefreshToken | null };
 
@@ -700,7 +740,7 @@ export async function completeSignIn(
   const verified = await directory.verifyIdToken(idToken, { clientId: a.clientId, nonce: a.nonce }, a.signal);
   if (!verified.ok) return fail({ kind: 'identity', problem: verified.problem });
   if (!hasPlanScope(grant.scopes)) return fail({ kind: 'plan-not-granted', identity: verified.identity });
-  return { ok: true, clientId: a.clientId, identity: verified.identity, grant: { ...grant, scopes: grant.scopes } };
+  return { ok: true, clientId: a.clientId, identity: verified.identity, grant: { ...grant, scopes: grant.scopes }, idToken };
 }
 
 export type RevokeResult = 'revoked' | 'transient' | 'rejected';

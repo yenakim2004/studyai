@@ -458,7 +458,7 @@ describe('G2: identity checks and an identity-only sign-in', () => {
   it('decideSignIn is the policy in one place', () => {
     const c1 = parseIssuedClientId('oaiapp_one')!;
     const c2 = parseIssuedClientId('oaiapp_two')!;
-    const me = { subject: parseSubject('me')!, email: 'me@example.test' };
+    const me = { subject: parseSubject('me')!, email: 'me@example.test', issuedAt: 0 };
     const reg = { clientId: c1, subject: me.subject, email: me.email, planDisabled: false };
     expect(decideSignIn({ purpose: 'reauth', registration: reg, liveClientId: c1, attemptClientId: c1, result: { kind: 'granted', identity: me } })).toMatchObject({ outcome: 'connected', install: true, revokeOld: false, revokeNew: false });
     expect(decideSignIn({ purpose: 'new', registration: reg, liveClientId: c1, attemptClientId: c2, result: { kind: 'granted', identity: { ...me, subject: parseSubject('you')! } } })).toMatchObject({ outcome: 'connected', revokeOld: true });

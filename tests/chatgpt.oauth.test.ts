@@ -209,7 +209,8 @@ describe('completing a sign-in', () => {
     expect(await result).toEqual({
       ok: true,
       clientId: CLIENT,
-      identity: { subject: 'user-123', email: 'student@example.com' },
+      identity: { subject: 'user-123', email: 'student@example.com', issuedAt: (NOW_S - 10) * 1000 },
+      idToken: expect.any(String),
       grant: {
         accessToken: 'at-new',
         refreshToken: 'rt-new',
@@ -241,10 +242,10 @@ describe('completing a sign-in', () => {
     expect(await run(() => json({ error: 'invalid_client' }, 401)).result).toMatchObject({ ok: false, failure: { failure: { kind: 'invalid-client' } } });
     expect(await run(() => json({ error: 'invalid_request' }, 400)).result).toMatchObject({ failure: { failure: { kind: 'rejected', status: 400, code: 'invalid_request' } } });
     expect(await run(() => json({ error: 'invalid_refresh_token' }, 400)).result).toMatchObject({ failure: { failure: { kind: 'rejected' } } });
-    expect(await run(() => new Response('oops', { status: 503 })).result).toMatchObject({ failure: { failure: { kind: 'transient' } } });
-    expect(await run(() => new Response(null, { status: 302, headers: { location: 'https://evil.example/' } })).result).toMatchObject({ failure: { failure: { kind: 'transient' } } });
-    expect(await run(() => Promise.reject(new TypeError('offline'))).result).toMatchObject({ failure: { failure: { kind: 'transient' } } });
-    expect(await run(() => new Response('x'.repeat(70_000), { status: 503 })).result).toMatchObject({ failure: { failure: { kind: 'transient' } } });
+    expect(await run(() => new Response('oops', { status: 503 })).result).toMatchObject({ failure: { failure: { kind: 'transient', spent: 'unknown' } } });
+    expect(await run(() => new Response(null, { status: 302, headers: { location: 'https://evil.example/' } })).result).toMatchObject({ failure: { failure: { kind: 'transient', spent: 'no' } } });
+    expect(await run(() => Promise.reject(new TypeError('offline'))).result).toMatchObject({ failure: { failure: { kind: 'transient', spent: 'unknown' } } });
+    expect(await run(() => new Response('x'.repeat(70_000), { status: 503 })).result).toMatchObject({ failure: { failure: { kind: 'transient', spent: 'unknown' } } });
   });
 
   it('rejects a 200 it cannot trust, and hands back any refresh token it was given for revocation', async () => {
@@ -262,7 +263,7 @@ describe('completing a sign-in', () => {
 
   it('keeps verified identity when plan consent is absent without granting inference', async () => {
     const r = await run(() => json(tokenBody({ scope: 'openid profile email offline_access' }))).result;
-    expect(r).toEqual({ ok: false, failure: { kind: 'plan-not-granted', identity: { subject: 'user-123', email: 'student@example.com' } }, orphan: 'rt-new' });
+    expect(r).toEqual({ ok: false, failure: { kind: 'plan-not-granted', identity: { subject: 'user-123', email: 'student@example.com', issuedAt: (NOW_S - 10) * 1000 } }, orphan: 'rt-new' });
     expect(await run(() => json(tokenBody({ scope: 'openid', id_token: idToken({ nonce: 'wrong' }) }))).result).toEqual({ ok: false, failure: { kind: 'identity', problem: 'nonce-mismatch' }, orphan: 'rt-new' });
   });
 
@@ -282,9 +283,9 @@ describe('ID-token verification', () => {
   };
 
   it('accepts a token signed by a published key with the right claims', async () => {
-    expect((await verify(idToken())).result).toEqual({ ok: true, identity: { subject: 'user-123', email: 'student@example.com' } });
-    expect((await verify(idToken({ email: undefined }))).result).toEqual({ ok: true, identity: { subject: 'user-123', email: null } });
-    expect((await verify(idToken({ email: 7 }))).result).toEqual({ ok: true, identity: { subject: 'user-123', email: null } });
+    expect((await verify(idToken())).result).toEqual({ ok: true, identity: { subject: 'user-123', email: 'student@example.com', issuedAt: (NOW_S - 10) * 1000 } });
+    expect((await verify(idToken({ email: undefined }))).result).toMatchObject({ ok: true, identity: { subject: 'user-123', email: null } });
+    expect((await verify(idToken({ email: 7 }))).result).toMatchObject({ ok: true, identity: { subject: 'user-123', email: null } });
     expect((await verify(idToken({ azp: 7 }))).result).toEqual({ ok: false, problem: 'wrong-audience' });
   });
 
@@ -355,6 +356,61 @@ describe('ID-token verification', () => {
     expect((await verify(es, { keys: [ecJwk], disc: { id_token_signing_alg_values_supported: ['RS256', 'ES256'] } })).result.ok).toBe(true);
   });
 
+  describe('a token transferred from the laptop', () => {
+    const CREATED = NOW - 5 * 60_000;
+    const EXPIRES = NOW + 5 * 60_000;
+    const transferred = async (token: string, o: { now?: number; window?: readonly [number, number]; nonce?: string } = {}) => {
+      const up = upstream(directoryRoutes());
+      const dir = new OpenAiDirectory({ http: up.http, now: () => o.now ?? NOW });
+      return dir.verifyTransferredIdToken(token, { clientId: CLIENT, nonce: o.nonce ?? 'nonce-1', issuedWithin: o.window ?? [CREATED, EXPIRES] }, signal());
+    };
+    const at = (ms: number) => Math.floor(ms / 1000);
+
+    it('accepts a token whose exp has passed by upload time when its signed iat is inside the pairing window', async () => {
+      const token = idToken({ iat: at(NOW - 60_000), exp: at(NOW - 60_000) + 120 });
+      const later = NOW + 4 * 60_000;
+      expect((await verify(token, { now: later })).result).toEqual({ ok: false, problem: 'expired' });
+      expect(await transferred(token, { now: later })).toEqual({ ok: true, identity: { subject: 'user-123', email: 'student@example.com', issuedAt: at(NOW - 60_000) * 1000 } });
+    });
+
+    it('accepts the window edges and rejects one second outside either edge', async () => {
+      const exp = (iat: number) => ({ iat, exp: iat + 600 });
+      expect((await transferred(idToken(exp(at(CREATED))))).ok).toBe(true);
+      expect((await transferred(idToken(exp(at(EXPIRES))))).ok).toBe(true);
+      expect(await transferred(idToken(exp(at(CREATED) - 1)))).toEqual({ ok: false, problem: 'expired' });
+      expect(await transferred(idToken(exp(at(EXPIRES) + 1)))).toEqual({ ok: false, problem: 'expired' });
+    });
+
+    it('rejects a token signed after the pairing expired, and a token older than the pairing', async () => {
+      expect(await transferred(idToken({ iat: at(NOW + 3_600_000), exp: at(NOW + 3_600_000) + 600 }))).toEqual({ ok: false, problem: 'expired' });
+      expect(await transferred(idToken({ iat: at(CREATED - 3_600_000), exp: at(CREATED - 3_600_000) + 600 }))).toEqual({ ok: false, problem: 'expired' });
+    });
+
+    it('checks the window against the signed iat, not a forged one', async () => {
+      const [h, , sig] = idToken({ iat: at(CREATED - 3_600_000), exp: at(CREATED - 3_600_000) + 600 }).split('.');
+      expect(await transferred(`${h}.${b64(claims({ iat: at(NOW), exp: at(NOW) + 600 }))}.${sig}`)).toEqual({ ok: false, problem: 'bad-signature' });
+    });
+
+    it('stays strict about nonce, audience, issuer, signature and shape', async () => {
+      expect(await transferred(idToken(), { nonce: 'another-pairing' })).toEqual({ ok: false, problem: 'nonce-mismatch' });
+      expect(await transferred(idToken({ aud: OTHER_CLIENT }))).toEqual({ ok: false, problem: 'wrong-audience' });
+      expect(await transferred(idToken({ iss: 'https://evil.example' }))).toEqual({ ok: false, problem: 'wrong-issuer' });
+      expect(await transferred(idToken({}, { kid: 'a' }, KEY_B.privateKey))).toEqual({ ok: false, problem: 'bad-signature' });
+      expect(await transferred(idToken({ iat: 'yesterday' }))).toEqual({ ok: false, problem: 'malformed' });
+      expect(await transferred(idToken({ iat: undefined }))).toEqual({ ok: false, problem: 'malformed' });
+      expect(await transferred('not.a.jwt')).toEqual({ ok: false, problem: 'malformed' });
+    });
+
+    it('still rejects a token that was already expired when it was signed', async () => {
+      expect(await transferred(idToken({ iat: at(NOW), exp: at(NOW) - 3600 }))).toEqual({ ok: false, problem: 'expired' });
+    });
+
+    it('refuses a nonsense window', async () => {
+      expect(await transferred(idToken(), { window: [EXPIRES, CREATED] })).toEqual({ ok: false, problem: 'expired' });
+      expect(await transferred(idToken(), { window: [Number.NaN, EXPIRES] })).toEqual({ ok: false, problem: 'expired' });
+    });
+  });
+
   it('reports unavailable keys when discovery cannot be fetched', async () => {
     const up = upstream({ [DISCOVERY]: () => new Response('down', { status: 503 }) });
     const dir = new OpenAiDirectory({ http: up.http, now: () => NOW });
@@ -400,8 +456,22 @@ describe('refreshing', () => {
     expect(await refresh(() => json({ error: 'invalid_client' }, 401)).result).toEqual({ ok: false, failure: { kind: 'invalid-client' } , orphan: null });
     expect(await refresh(() => json({ error: 'invalid_request' }, 400)).result).toEqual({ ok: false, failure: { kind: 'rejected', status: 400, code: 'invalid_request' } , orphan: null });
     expect(await refresh(() => json({ detail: 'no code here' }, 400)).result).toEqual({ ok: false, failure: { kind: 'rejected', status: 400, code: null } , orphan: null });
-    expect(await refresh(() => json({ error: 'slow_down' }, 429)).result).toEqual({ ok: false, failure: { kind: 'transient' } , orphan: null });
-    expect(await refresh(() => new Response('bad gateway', { status: 502 })).result).toEqual({ ok: false, failure: { kind: 'transient' } , orphan: null });
+    expect(await refresh(() => json({ error: 'slow_down' }, 429)).result).toEqual({ ok: false, failure: { kind: 'transient', spent: 'no' }, orphan: null });
+    expect(await refresh(() => new Response('bad gateway', { status: 502 })).result).toEqual({ ok: false, failure: { kind: 'transient', spent: 'unknown' }, orphan: null });
+  });
+
+  it('says whether a failed refresh may have been spent upstream', async () => {
+    const spent = async (route: Route) => {
+      const r = await refresh(route).result;
+      return r.ok ? 'ok' : r.failure.kind === 'transient' ? r.failure.spent : r.failure.kind;
+    };
+    expect(await spent(() => json({ error: 'slow_down' }, 429))).toBe('no');
+    expect(await spent(() => new Response(null, { status: 307, headers: { location: 'https://auth.openai.com/elsewhere' } }))).toBe('no');
+    for (const status of [500, 502, 503, 504]) expect(await spent(() => new Response('gateway', { status })), String(status)).toBe('unknown');
+    expect(await spent(() => Promise.reject(new TypeError('connection reset')))).toBe('unknown');
+    expect(await spent(() => json({ error: 'invalid_request' }, 400))).toBe('rejected');
+    expect(await spent(() => json(tokenBody({ padding: 'x'.repeat(70_000) })))).toBe('invalid-response');
+    expect(await spent(() => new Response('<html>not json</html>', { status: 200 }))).toBe('invalid-response');
   });
 
   it('times out a hung token endpoint and a hung body, leaving no timer behind', async () => {
@@ -410,14 +480,14 @@ describe('refreshing', () => {
     expect(vi.getTimerCount()).toBe(0);
     const hung = refresh(() => new Promise<Response>(() => {})).result;
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(await hung).toEqual({ ok: false, failure: { kind: 'transient' }, orphan: null });
+    expect(await hung).toEqual({ ok: false, failure: { kind: 'transient', spent: 'unknown' }, orphan: null });
     expect(vi.getTimerCount()).toBe(0);
 
     let cancelled = false;
     const slowBody = new ReadableStream<Uint8Array>({ pull: () => new Promise(() => {}), cancel: () => void (cancelled = true) });
     const stalled = refresh(() => new Response(slowBody, { status: 200 })).result;
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(await stalled).toEqual({ ok: false, failure: { kind: 'transient' }, orphan: null });
+    expect(await stalled).toEqual({ ok: false, failure: { kind: 'transient', spent: 'unknown' }, orphan: null });
     expect(cancelled).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -427,15 +497,15 @@ describe('refreshing', () => {
     const ctl = new AbortController();
     const pending = refreshGrant(up.http, { clientId: CLIENT, refreshToken: RT, now: NOW, signal: ctl.signal });
     ctl.abort();
-    expect(await pending).toEqual({ ok: false, failure: { kind: 'transient' }, orphan: null });
+    expect(await pending).toEqual({ ok: false, failure: { kind: 'transient', spent: 'unknown' }, orphan: null });
   });
 });
 
 describe('when to refresh', () => {
   it('keeps outage status when the refresh endpoint returns a large error page', async () => {
-    for (const status of [429, 503]) {
+    for (const [status, spent] of [[429, 'no'], [503, 'unknown']] as const) {
       const up = upstream({ [TOKEN]: () => new Response('x'.repeat(70_000), { status }) });
-      expect(await refreshGrant(up.http, { clientId: CLIENT, refreshToken: RT, now: NOW, signal: signal() })).toEqual({ ok: false, failure: { kind: 'transient' }, orphan: null });
+      expect(await refreshGrant(up.http, { clientId: CLIENT, refreshToken: RT, now: NOW, signal: signal() })).toEqual({ ok: false, failure: { kind: 'transient', spent }, orphan: null });
     }
   });
 

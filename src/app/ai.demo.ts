@@ -16,6 +16,14 @@ export function connectChatGpt(_o: { account: 'current' | 'other'; forceConsent:
   return Promise.resolve({ ok: false, error: WHY });
 }
 
+export function createChatGptPairing(_o: { account: 'current' | 'other'; forceConsent: boolean }): Promise<ActionResult> {
+  return Promise.resolve({ ok: false, error: WHY });
+}
+
+export function installChatGptFile(_file: File): Promise<ActionResult> {
+  return Promise.resolve({ ok: false, error: WHY });
+}
+
 export function loadChatGptModels(): Promise<ChatGptModelsResult> {
   return Promise.resolve({ ok: false, error: WHY });
 }

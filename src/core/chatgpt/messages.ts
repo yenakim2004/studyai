@@ -11,7 +11,7 @@ import type { ResponsesFailure } from './responses';
 export const CHATGPT_REPLY = {
   'chatgpt-signin-required': { status: 403, message: 'ChatGPT가 연결되어 있지 않거나 로그인이 만료되었습니다. 설정 → AI에서 ChatGPT를 다시 연결하세요.' },
   'chatgpt-plan-disabled': { status: 403, message: 'ChatGPT 플랜 사용이 허용되지 않았습니다. 설정 → AI에서 "ChatGPT 플랜 사용 허용"을 누르세요.' },
-  'chatgpt-not-configured': { status: 503, message: '이 서버에는 ChatGPT 연결 설정이 없습니다. 내 컴퓨터에서 pnpm local로 실행한 StudyAI에서만 쓸 수 있습니다.' },
+  'chatgpt-not-configured': { status: 503, message: '이 서버에는 ChatGPT 연결 설정이 없습니다. 개인 사이트의 서버 설정 또는 로컬 실행 상태를 확인하세요.' },
   'chatgpt-paused': { status: 429, message: 'ChatGPT 사용 한도 때문에 멈춰 있습니다. ChatGPT 설정에서 사용량을 확인한 뒤 설정 → AI에서 "다시 시작"을 누르세요.' },
   'chatgpt-usage-limit': { status: 429, message: 'ChatGPT 플랜의 사용 한도에 도달했습니다. 한도가 풀린 뒤 설정 → AI에서 "다시 시작"을 누르세요.' },
   'chatgpt-not-eligible': { status: 403, message: '이 ChatGPT 계정은 외부 앱에서 플랜을 사용할 수 없습니다. ChatGPT 플랜과 설정을 확인하세요.' },
@@ -73,10 +73,12 @@ export const SIGN_IN_SENTENCE = {
   'plan-not-enabled': 'ChatGPT 플랜 사용 권한이 허용되지 않았습니다. 설정에서 "ChatGPT 플랜 사용 허용"을 누르면 권한을 다시 요청합니다.',
   superseded: '더 새로운 로그인이나 연결 해제가 있어 이 로그인은 적용하지 않았습니다.',
   'upstream-unavailable': 'OpenAI에 연결하지 못해 로그인을 마치지 못했습니다. 기존 연결은 그대로 유지됩니다. 잠시 뒤 다시 시도하세요.',
+  'file-invalid': '연결 파일을 확인하지 못했습니다. 로그인 도구가 만든 연결 결과 파일을 선택하세요.',
 } as const satisfies Record<SignInOutcome, string>;
 
 export const SESSION_ENDED_SENTENCE = {
   'refresh-rejected': 'ChatGPT 로그인이 만료되었거나 해지되었습니다. 설정에서 다시 연결하세요.',
+  'refresh-indeterminate': 'ChatGPT 로그인 갱신 결과를 확인하지 못했습니다. 설정에서 다시 연결하세요.',
   'invalid-client': '저장된 앱 등록이 더 이상 유효하지 않습니다. 설정에서 다시 연결하면 새로 등록합니다.',
   unreadable: '저장된 ChatGPT 로그인 정보를 읽을 수 없어 지웠습니다. 설정에서 다시 연결하세요.',
 } as const satisfies Record<Extract<ChatGptNotice, { kind: 'session-ended' }>['reason'], string>;
@@ -103,7 +105,7 @@ export const PAUSE_SENTENCE = {
 } as const satisfies Record<ChatGptPauseCode, string>;
 
 export const GATE_REASON = {
-  'not-configured': '이 서버에는 ChatGPT 연결 설정이 없습니다. 내 컴퓨터에서 pnpm local로 실행하세요.',
+  'not-configured': '이 서버에는 ChatGPT 연결 설정이 없습니다. 개인 사이트의 서버 설정 또는 로컬 실행 상태를 확인하세요.',
   disconnected: 'ChatGPT가 연결되어 있지 않습니다. 설정 → AI에서 연결하세요.',
   ended: 'ChatGPT 로그인이 만료되었습니다. 설정 → AI에서 다시 연결하세요.',
   'plan-disabled': 'ChatGPT 계정은 연결됐지만 플랜 사용이 허용되지 않았습니다. 설정 → AI에서 "ChatGPT 플랜 사용 허용"을 누르세요.',
@@ -111,7 +113,7 @@ export const GATE_REASON = {
 
 export const START_REFUSAL = {
   'loopback-only': 'ChatGPT 연결은 내 컴퓨터에서 pnpm local로 실행한 StudyAI(http://127.0.0.1 주소)에서만 할 수 있습니다.',
-  'not-configured': '이 서버에는 ChatGPT 연결 설정이 없습니다. pnpm local로 다시 실행하세요.',
+  'not-configured': '이 서버에는 ChatGPT 연결 설정이 없습니다. 개인 사이트의 서버 설정 또는 로컬 실행 상태를 확인하세요.',
   superseded: '더 새로운 연결 요청이나 연결 해제가 있어 이 요청을 취소했습니다.',
 } as const;
 export type StartRefusal = keyof typeof START_REFUSAL;

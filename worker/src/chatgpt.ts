@@ -30,8 +30,9 @@ import { DEFAULT_STREAM_TIMING, listModels, parseModelSlug, streamResponse, type
 import { CHATGPT_REPLY, FAILURE_CODE, GATE_REASON, PAUSE_SENTENCE, type ChatGptCode, type StartRefusal } from '../../src/core/chatgpt/messages';
 import { AI_OUTPUT_CAP, SIGN_IN_OUTCOMES, type AiReply, type AiStatus, type AiTask, type ChatGptConnection, type ChatGptModel, type ChatGptNotice, type ChatGptPauseCode, type SignInOutcome } from '../../src/core/tutor/contract';
 import { buildAiRequest } from '../../src/core/tutor/prompts';
-import { constantTimeEqual, fromBase64Url, sha256Hex, toBase64Url } from './encoding';
+import { constantTimeEqual, sha256Hex } from './encoding';
 import type { Loopback } from './loopback';
+import { credsAad, parseSealKeyBytes, pendingAad, seal, unseal } from './seal';
 
 /**
  * The single owner of the ChatGPT account on this server: registration, sealed credentials, the pending sign-in, the model
@@ -129,8 +130,8 @@ type Registration = z.output<typeof RegistrationSchema>;
 const CredsRowSchema = z.object({ generation: z.number().int(), rev: RevSchema, clientId: clientIdSchema, sealed: z.string() });
 type CredsRow = z.output<typeof CredsRowSchema>;
 
-/** The sealed plaintext. Never leaves this module. There is no ID token: none is stored or sent anywhere. */
-const CredentialsSchema = z.object({
+/** The sealed plaintext. Never leaves the server. There is no ID token: none is stored or sent anywhere. */
+export const CredentialsSchema = z.object({
   subject: subjectSchema,
   email: z.string().max(320).nullable(),
   accessToken: z.string().transform((v, ctx) => parseAccessToken(v) ?? (ctx.addIssue({ code: 'custom' }), z.NEVER)),
@@ -140,7 +141,7 @@ const CredentialsSchema = z.object({
   /** Always contains the plan scope: a grant without it is never sealed. */
   scopes: z.array(z.string()).refine(hasPlanScope),
 });
-type Credentials = z.output<typeof CredentialsSchema>;
+export type Credentials = z.output<typeof CredentialsSchema>;
 
 const PendingRowSchema = z.object({
   attemptId: AttemptIdSchema,
@@ -270,39 +271,6 @@ function signInFailureOutcome(f: SignInFailure): SignInOutcome {
   }
 }
 
-// ---- sealing ----------------------------------------------------------------------------------------------------------
-// AES-256-GCM, `v1.<iv>.<ciphertext>`. The additional data binds a blob to its slot and to its row identity (rev or
-// attempt id), so a sealed value copied into another row does not open. It protects against a copy of the state
-// directory without the key, nothing more: the key sits next to it on the same disk.
-
-function parseSealKeyBytes(raw: string | undefined): Uint8Array<ArrayBuffer> | null {
-  if (!raw) return null;
-  const bytes = fromBase64Url(raw.trim());
-  return bytes && bytes.length === 32 ? bytes : null;
-}
-
-async function seal(key: CryptoKey, aad: string, plaintext: string): Promise<string> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(aad) }, key, new TextEncoder().encode(plaintext)));
-  return `v1.${toBase64Url(iv)}.${toBase64Url(ct)}`;
-}
-
-async function unseal(key: CryptoKey, aad: string, sealed: string): Promise<string | undefined> {
-  const [v, ivText, ctText, ...rest] = sealed.split('.');
-  if (v !== 'v1' || !ivText || !ctText || rest.length > 0) return undefined;
-  const iv = fromBase64Url(ivText);
-  const ct = fromBase64Url(ctText);
-  if (!iv || iv.length !== 12 || !ct) return undefined;
-  try {
-    return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(aad) }, key, ct));
-  } catch {
-    return undefined;
-  }
-}
-
-const credsAad = (rev: string) => `studyai/chatgpt/creds/v1/${rev}`;
-const pendingAad = (attemptId: string) => `studyai/chatgpt/pending/v1/${attemptId}`;
-
 const readJson = (raw: string | undefined): unknown => {
   if (raw === undefined) return undefined;
   try {
@@ -313,7 +281,7 @@ const readJson = (raw: string | undefined): unknown => {
 };
 
 /** Settles with the promise, or with 'aborted' once the signal fires. The promise itself keeps running. */
-function untilAborted<T>(p: Promise<T>, signal: AbortSignal): Promise<T | 'aborted'> {
+export function untilAborted<T>(p: Promise<T>, signal: AbortSignal): Promise<T | 'aborted'> {
   if (signal.aborted) return Promise.resolve('aborted');
   return new Promise((resolve, reject) => {
     const onAbort = () => resolve('aborted');
@@ -331,7 +299,7 @@ function untilAborted<T>(p: Promise<T>, signal: AbortSignal): Promise<T | 'abort
   });
 }
 
-const reply = (code: ChatGptCode, requestId: string | null = null): AiReply => ({
+export const reply = (code: ChatGptCode, requestId: string | null = null): AiReply => ({
   ok: false,
   code,
   message: requestId ? `${CHATGPT_REPLY[code].message} (요청 ID: ${requestId})` : CHATGPT_REPLY[code].message,
