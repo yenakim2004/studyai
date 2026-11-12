@@ -4,7 +4,7 @@ import { chatGptAction, connectChatGpt, createChatGptPairing, installChatGptFile
 import { useToast } from '@/app/toast';
 import { noticeSentence, PAUSE_SENTENCE } from '@/core/chatgpt/messages';
 import type { AiStatus, ChatGptModel } from '@/core/tutor/contract';
-import { Button, Callout, Field, Select, Spinner } from '@/ui/primitives';
+import { Button, Callout, Field, Select, Spinner, TextArea } from '@/ui/primitives';
 
 const STATE_LABEL: Record<AiStatus['state'], { text: string; cls: string }> = {
   off: { text: '꺼짐', cls: 'bg-sunken text-ink-2' },
@@ -36,6 +36,11 @@ function Connection({ status }: { status: AiStatus }) {
   const [busy, setBusy] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const c = status.connection;
+  const setupPrompt = `@Sites ${window.location.origin} 의 StudyAI AI 연결 설정을 진행해 줘.
+https://github.com/yenakim2004/studyai 의 AGENTS.md와 docs/SITES-SETUP.md를 읽고 기존 사이트를 유지해 줘.
+D1, 서버 비밀 설정과 현재 연결 상태를 먼저 확인하고, 이미 연결되어 있으면 유지해 줘.
+필요한 연결 도구 준비와 실행은 맡아서 해 줘. 내가 직접 로그인하거나 파일을 전달해야 할 때만 한 단계씩 안내해 줘.
+토큰을 채팅에 요청하거나 기존 인증 파일을 복사하지 마. 실제 모델 조회와 첫 답변까지 확인한 뒤 연결 결과를 알려 줘.`;
 
   const label = STATE_LABEL[status.state];
 
@@ -81,6 +86,30 @@ function Connection({ status }: { status: AiStatus }) {
         <p role="status" className="max-w-prose text-sm">
           {noticeSentence(status.notice)}
         </p>
+      )}
+
+      {status.connectVia === 'file' && status.signInAvailable && (
+        <div className="max-w-prose rounded-lg border border-rule bg-accent-soft/30 p-4 text-sm">
+          <h4 className="font-semibold">ChatGPT에 연결 설정 맡기기</h4>
+          <p className="mt-2 text-ink-2">아래 요청문을 복사해 Sites를 사용할 수 있는 ChatGPT 또는 Codex 대화에 붙여 넣으세요. 서버 설정과 도구 실행을 맡기고, 본인 로그인과 필요한 파일 전달은 안내에 따라 진행합니다.</p>
+          <Button className="mt-3" onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(setupPrompt);
+              toast.show('요청문을 복사했습니다. Sites 대화에 붙여 넣으세요.', 'ok');
+            } catch {
+              toast.show('복사하지 못했습니다. 요청문 보기를 열어 직접 복사하세요.', 'error');
+            }
+          }}>AI 설정 요청문 복사</Button>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-accent">요청문 보기</summary>
+            <div className="mt-2">
+              <Field label="Sites에 보낼 AI 설정 요청문" htmlFor="site-setup-prompt">
+                <TextArea id="site-setup-prompt" value={setupPrompt} readOnly rows={8} />
+              </Field>
+            </div>
+          </details>
+          <p className="mt-2 text-ink-2">복사만으로 설정이 바뀌지는 않습니다. 실제 ChatGPT 플랜 연결은 별도로 확인하며, 현재 개인 Sites 연결은 실험 기능입니다.</p>
+        </div>
       )}
 
       {status.connectVia === 'file' && status.signInAvailable && (

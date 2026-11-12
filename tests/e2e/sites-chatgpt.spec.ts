@@ -59,12 +59,25 @@ test('personal Site connects through files and keeps the private token out of br
     if (!address || typeof address === 'string') throw new Error('missing listener');
     origin = `http://127.0.0.1:${address.port}`;
     await page.goto(origin + '/settings');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.getByRole('button', { name: 'AI 설정 요청문 복사' }).click();
+    const setupPrompt = await page.evaluate(() => navigator.clipboard.readText());
+    expect(setupPrompt).toContain(`@Sites ${origin}`);
+    expect(setupPrompt).toContain('docs/SITES-SETUP.md');
+    expect(setupPrompt).not.toMatch(/fake-at|fake-rt|accessToken|refreshToken|idToken/);
+    await page.getByText('요청문 보기', { exact: true }).click();
+    await expect(page.getByLabel('Sites에 보낼 AI 설정 요청문')).toHaveValue(setupPrompt);
+    await page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('denied')) });
+    });
+    await page.getByRole('button', { name: 'AI 설정 요청문 복사' }).click();
+    await expect(page.getByText('복사하지 못했습니다. 요청문 보기를 열어 직접 복사하세요.')).toBeVisible();
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'ChatGPT 연결 요청 파일 받기' }).click();
     await (await download).saveAs(join(dir, 'pairing.json'));
     await expect(page.getByText('연결 파일을 기다리는 중', { exact: false })).toBeVisible();
     await page.getByLabel('암호화된 연결 결과 파일').setInputFiles(join(dir, 'pairing.json'));
-    await expect(page.getByRole('alert')).toContainText('요청 파일은 올릴 수 없습니다');
+    await expect(page.getByRole('region', { name: 'ChatGPT 플랜 연결' }).getByRole('alert')).toContainText('요청 파일은 올릴 수 없습니다');
     let callback: Promise<Response> | undefined;
     const result = await runConnect(['pairing.json', '--output', 'connection.json'], { cwd: dir, now: Date.now, http: fake.fetch, waitMs: 10_000, out: () => {}, err: () => {}, presentAuthorizeUrl: url => { callback = fetch(fake.authorize(url)); } });
     expect(result).toBe(0);
