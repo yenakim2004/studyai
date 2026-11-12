@@ -28,8 +28,14 @@ const mf = new Miniflare(convertV4MiniflareOptions({
   compatibilityDate: config.compatibility_date, host: '127.0.0.1', port: 0,
   bindings: { STUDYAI_SITE_ORIGIN: origin, CHATGPT_SEAL_KEY: randomBytes(32).toString('base64url') },
   d1Databases: ['DB'],
+  serviceBindings: { ASSETS: request => new URL(request.url).pathname === '/' ? new Response('<html lang="ko">StudyAI</html>', { headers: { 'content-type': 'text/html' } }) : new Response('missing', { status: 404 }) },
 }));
 try {
+  const page = await mf.dispatchFetch(origin + '/settings', { headers: { accept: 'text/html' } });
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /StudyAI/);
+  assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.equal((await mf.dispatchFetch(origin + '/assets/missing.js')).status, 404);
   const db = await mf.getD1Database('DB');
   for (const { tag } of (await readJson('drizzle/meta/_journal.json')).entries) {
     const sql = await readFile(`drizzle/${tag}.sql`, 'utf8');

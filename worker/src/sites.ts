@@ -21,7 +21,10 @@ export default {
         defer: (promise) => ctx.waitUntil(promise),
       }));
     }
-    const asset = await env.ASSETS.fetch(request);
+    let asset = await env.ASSETS.fetch(request);
+    if (asset.status === 404 && (request.method === 'GET' || request.method === 'HEAD') && request.headers.get('accept')?.includes('text/html')) {
+      asset = await env.ASSETS.fetch(new Request(new URL('/', request.url), request));
+    }
     const response = new Response(asset.body, asset);
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
     return response;
