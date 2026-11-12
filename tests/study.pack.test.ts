@@ -64,9 +64,9 @@ describe('extractJson', () => {
     expect(extractJson('Sure: {"a": {"b": 3}} thanks')).toEqual({ a: { b: 3 } });
   });
   it('explains failures', () => {
-    expect(() => extractJson('no json here')).toThrow(/No JSON object found/);
-    expect(() => extractJson('{"a": ')).toThrow(/No JSON object found|could not be parsed/);
-    expect(() => extractJson('{"a": nope}')).toThrow(/could not be parsed/);
+    expect(() => extractJson('no json here')).toThrow(/JSON 객체를 찾지 못했습니다/);
+    expect(() => extractJson('{"a": ')).toThrow(/JSON 객체를 찾지 못했습니다|JSON을 읽을 수 없습니다/);
+    expect(() => extractJson('{"a": nope}')).toThrow(/JSON을 읽을 수 없습니다/);
   });
 });
 
@@ -100,9 +100,9 @@ describe('quote verification', () => {
 describe('planPack', () => {
   it('rejects things that are not packs, with a reason', async () => {
     const { course, ctx } = await setup();
-    expect(planPack({ hello: 1 }, course.id, [ctx]).fatal).toMatch(/not a StudyAI pack/);
-    expect(planPack(pack({ version: 99 }), course.id, [ctx]).fatal).toMatch(/format version 99/);
-    expect(planPack(pack(), course.id, [ctx]).issues.some((i) => /no notes, cards or questions/.test(i.message))).toBe(true);
+    expect(planPack({ hello: 1 }, course.id, [ctx]).fatal).toMatch(/StudyAI 팩이 아닙니다/);
+    expect(planPack(pack({ version: 99 }), course.id, [ctx]).fatal).toMatch(/형식 버전 99/);
+    expect(planPack(pack(), course.id, [ctx]).issues.some((i) => /팩에 노트, 카드, 문제가 하나도 없습니다/.test(i.message))).toBe(true);
   });
 
   it('matches lectures by hash, then title, then manual mapping', async () => {
@@ -113,11 +113,11 @@ describe('planPack', () => {
     expect(byTitle.lectureMap[0]).toMatchObject({ localId: ctx.id, how: 'title' });
     const none = planPack(pack({ lectures: [{ ref: 'L1', title: 'Unknown lecture' }] }), course.id, [ctx]);
     expect(none.lectureMap[0]!.localId).toBeUndefined();
-    expect(none.issues[0]!.message).toMatch(/No lecture in this course matches/);
+    expect(none.issues[0]!.message).toMatch(/이 과목에 “Unknown lecture”와\(과\) 일치하는 강의가 없습니다/);
     const manual = planPack(pack({ lectures: [{ ref: 'L1', title: 'Unknown lecture' }] }), course.id, [ctx], { L1: ctx.id });
     expect(manual.lectureMap[0]).toMatchObject({ localId: ctx.id, how: 'manual' });
     const stale = planPack(pack({ lectures: [{ ref: 'L1', title: 'Lecture 7 Undecidability', slideCount: 55 }] }), course.id, [ctx]);
-    expect(stale.issues.some((i) => /Slide numbers may not line up/.test(i.message))).toBe(true);
+    expect(stale.issues.some((i) => /슬라이드 번호가 어긋날 수 있으니/.test(i.message))).toBe(true);
   });
 
   it('accepts good items as pending/imported, checks every quote and counts sources', async () => {
@@ -158,9 +158,12 @@ describe('planPack', () => {
     expect(sourceStatus(plan.cards[0]!.sources)).toBe('unverified');
     expect(plan.cards[1]!.sources).toEqual([]); // dropped: slide 99 does not exist
     const msgs = plan.issues.map((i) => i.message).join('\n');
-    expect(msgs).toMatch(/was not found on slide 1/);
-    expect(msgs).toMatch(/has only 4 slides/);
-    expect(msgs).toMatch(/Claims to be on the slides, but no cited quote could be verified/);
+    expect(msgs).toMatch(/의 1번 슬라이드에서 찾지 못했습니다/);
+    expect(msgs).toMatch(/이 강의는 4장뿐이라/);
+    expect(msgs).toMatch(/슬라이드에 있다고 하지만 인용문을 하나도 확인하지 못했습니다/);
+    // the same problems by code, for a caller that acts on them (the command-line check), with the slide a missed quote pointed at
+    expect(plan.issues.map((i) => i.code).filter(Boolean)).toEqual(['QUOTE_NOT_FOUND', 'LECTURE_CLAIM_UNVERIFIED', 'SOURCE_SLIDE_MISSING']);
+    expect(plan.issues.find((i) => i.code === 'QUOTE_NOT_FOUND')!.slide).toEqual({ lectureTitle: ctx.title, number: 1 });
     expect(plan.stats.unverified).toBe(2);
   });
 
@@ -182,9 +185,9 @@ describe('planPack', () => {
     expect(plan.cards).toHaveLength(1);
     expect(plan.cards[0]!.basis).toBe('uncertain');
     const errs = plan.issues.filter((i) => i.severity === 'error').map((i) => i.message);
-    expect(errs.join('\n')).toMatch(/Card #1/.source === '' ? '' : /Skipped/);
-    expect(errs.some((m) => /no option is marked correct/.test(m))).toBe(true);
-    expect(plan.issues.some((i) => /No “basis” given/.test(i.message))).toBe(true);
+    expect(errs.join('\n')).toMatch(/건너뜀/);
+    expect(errs.some((m) => /정답으로 표시된 보기가 없습니다/.test(m))).toBe(true);
+    expect(plan.issues.some((i) => /“basis”가 없어/.test(i.message))).toBe(true);
   });
 
   it('builds questions: MCQ options, true/false, rubric marks check, required answers', async () => {
@@ -203,11 +206,11 @@ describe('planPack', () => {
     );
     expect(plan.questions).toHaveLength(3);
     expect(plan.questions[0]!.options).toEqual([{ id: 'o1', text: 'Halting', correct: true }, { id: 'o2', text: 'Sorting', correct: false }]);
-    expect(plan.questions[1]!.options!.find((o) => o.correct)!.text).toBe('False');
+    expect(plan.questions[1]!.options!.find((o) => o.correct)!.text).toBe('거짓');
     expect(plan.questions[2]!.lectureIds).toEqual([ctx.id]);
     expect(plan.questions[2]!.rubric.map((r) => r.id)).toEqual(['r1', 'r2']);
-    expect(plan.issues.some((i) => /add up to 2 but the question is worth 3/.test(i.message))).toBe(true);
-    expect(plan.issues.some((i) => /needs a model answer or marking points/.test(i.message))).toBe(true);
+    expect(plan.issues.some((i) => /채점 기준의 합은 2점인데 문제 배점은 3점입니다/.test(i.message))).toBe(true);
+    expect(plan.issues.some((i) => /모범 답안이나 채점 기준이 있어야 합니다/.test(i.message))).toBe(true);
   });
 });
 
@@ -239,7 +242,7 @@ describe('applying and removing a pack', () => {
 
   it('refuses to apply a failed plan', async () => {
     const { course } = await setup();
-    await expect(applyPackPlan(db, course.id, planPack({}, course.id, []))).rejects.toThrow(/not a StudyAI pack/);
+    await expect(applyPackPlan(db, course.id, planPack({}, course.id, []))).rejects.toThrow(/StudyAI 팩이 아닙니다/);
   });
 });
 
@@ -260,11 +263,12 @@ describe('lecture export for your own AI', () => {
   it('builds a prompt that carries the rules, the format and the professor’s style', () => {
     const p = studyPackPrompt({ amount: 'normal', wants: { notes: false, cards: true, questions: true }, examStyle: 'Answers must be 1-3 sentences.' });
     expect(p).toContain('"studyai-pack"');
-    expect(p).toContain('25 flashcards');
-    expect(p).toContain('12 exam-style questions');
-    expect(p).not.toContain('notes (summaries');
-    expect(p).toContain('Do not invent lecture content');
-    expect(p).toMatch(/A quote must support the WHOLE item.*never "lecture"/s); // a true quote does not make an unsupported claim "on the slides"
+    expect(p).toContain('플래시카드 25장');
+    expect(p).toContain('채점 기준이 있는 시험형 문제 12개');
+    expect(p).not.toContain('노트 10개');
+    expect(p).toContain('강의 내용, 정의, 증명 단계, 시험 규칙, 교수가 선호하는 것을 지어내지 마세요');
+    expect(p).toMatch(/quote는 항목 전체를 뒷받침해야 합니다.*절대 "lecture"가 아닙니다/s); // a true quote does not make an unsupported claim "on the slides"
+    expect(p).toMatch(/자연스러운 한국어로 쓰세요.*"quote"는 슬라이드 문장을 원래 언어 그대로.*번역하지 마세요/s); // Korean for the student, the slide's own words for the evidence
     expect(p).toContain('"outside"');
     expect(p).toContain('Answers must be 1-3 sentences.');
     expect(p).toContain('"fileHash"');
@@ -299,23 +303,23 @@ describe('asking for a pack that fits the answer limit', () => {
   });
 
   it('tells the model to leave the lists it was not asked for empty (found with the real model: a questions-only request came back with a card and a note)', () => {
-    expect(studyPackPrompt({ amount: 'few', wants: { notes: false, cards: false, questions: true }, outputTokens: 4_000 })).toContain('leave "notes" and "cards" as empty lists ([])');
-    expect(studyPackPrompt({ amount: 'few', wants: { notes: true, cards: false, questions: true } })).toContain('leave "cards" as empty lists ([])');
-    expect(studyPackPrompt({ amount: 'few', wants: all })).not.toContain('as empty lists'); // everything asked for: nothing to leave out
-    expect(studyPackPrompt({ amount: 'few', wants: { notes: false, cards: false, questions: false } })).not.toContain('as empty lists'); // nothing asked for: the generic task stays
+    expect(studyPackPrompt({ amount: 'few', wants: { notes: false, cards: false, questions: true }, outputTokens: 4_000 })).toContain('"notes"와 "cards"은(는) 빈 목록([])으로 두세요');
+    expect(studyPackPrompt({ amount: 'few', wants: { notes: true, cards: false, questions: true } })).toContain('"cards"은(는) 빈 목록([])으로 두세요');
+    expect(studyPackPrompt({ amount: 'few', wants: all })).not.toContain('빈 목록'); // everything asked for: nothing to leave out
+    expect(studyPackPrompt({ amount: 'few', wants: { notes: false, cards: false, questions: false } })).not.toContain('빈 목록'); // nothing asked for: the generic task stays
   });
 
   it('puts the cut counts and a "keep it short" rule into the prompt, and the most valuable list first', () => {
     const p = studyPackPrompt({ amount: 'normal', wants: all, outputTokens: 4_000 });
     const c = packCounts({ wants: all, amount: 'normal', outputTokens: 4_000 });
-    expect(p).toContain(`${c.cards} flashcards`);
-    expect(p).toContain(`${c.questions} exam-style questions`);
-    expect(p).not.toContain('25 flashcards');
-    expect(p).toMatch(/limited to about 2,000 words and is thrown away if it is cut off/);
-    expect(p).toMatch(/write fewer items, never a longer one/);
+    expect(p).toContain(`플래시카드 ${c.cards}장`);
+    expect(p).toContain(`시험형 문제 ${c.questions}개`);
+    expect(p).not.toContain('플래시카드 25장');
+    expect(p).toMatch(/약 1,400단어로 제한되며 중간에 잘리면 버려지므로/);
+    expect(p).toMatch(/항목 수를 줄이고, 항목을 길게 쓰지 마세요/);
     expect(p.indexOf('"questions": [')).toBeLessThan(p.indexOf('"cards": ['));
     expect(p.indexOf('"cards": [')).toBeLessThan(p.indexOf('"notes": ['));
-    expect(studyPackPrompt({ amount: 'normal', wants: all })).not.toMatch(/thrown away if it is cut off/); // the copy-and-paste prompt has no such limit
+    expect(studyPackPrompt({ amount: 'normal', wants: all })).not.toMatch(/잘리면 버려지므로/); // the copy-and-paste prompt has no such limit
   });
 });
 
@@ -339,17 +343,17 @@ describe('importing questions: the quality check is part of the check screen', (
     expect(plan.questions).toHaveLength(3);
     expect(plan.quality?.stats).toMatchObject({ questions: 3, totalMarks: 10 });
     const messages = plan.issues.map((i) => `${i.where}: ${i.message}`);
-    expect(messages.some((m) => /^Question #2: It is worth 6 marks but has only 2 marking points/.test(m))).toBe(true);
-    expect(messages.some((m) => /^Question #2: Question 2 is almost the same as question 1/.test(m))).toBe(true);
-    expect(messages.some((m) => /^Question #3: It has no model answer/.test(m))).toBe(true);
-    expect(plan.issues.filter((i) => i.severity === 'warning' && /^Question #1:/.test(i.where))).toEqual([]);
+    expect(messages.some((m) => /^문제 #2: 배점은 6점인데 채점 기준은 2개뿐입니다/.test(m))).toBe(true);
+    expect(messages.some((m) => /^문제 #2: 문제 2이\(가\) 문제 1과\(와\) 거의 같습니다/.test(m))).toBe(true);
+    expect(messages.some((m) => /^문제 #3: 비교할 모범 답안이 없습니다/.test(m))).toBe(true);
+    expect(plan.issues.filter((i) => i.severity === 'warning' && /^문제 #1:/.test(i.where))).toEqual([]);
   });
 
   it('names a question by its place in the pack even when an earlier one was skipped', async () => {
     const { course, ctx } = await setup();
     const plan = planPack(pack({ questions: [{ nonsense: true }, goodQ({ marks: 6 })] }), course.id, [ctx]);
     expect(plan.questions).toHaveLength(1);
-    expect(plan.issues.some((i) => i.where === 'Question #2' && /worth 6 marks but has only 2/.test(i.message))).toBe(true);
+    expect(plan.issues.some((i) => i.where === '문제 #2' && /배점은 6점인데 채점 기준은 2개뿐/.test(i.message))).toBe(true);
   });
 
   it('compares the questions with the plan that was asked for, and with the questions that already exist', async () => {
@@ -358,10 +362,10 @@ describe('importing questions: the quality check is part of the check screen', (
     const plan = planPack(pack({ questions: [goodQ()] }), course.id, [ctx], {}, undefined, { expected, existingPrompts: ['Explain why the halting problem is undecidable and name the method used to show it'] });
     expect(plan.quality?.stats.asPlanned).toEqual({ met: 0, of: 1 });
     const text = plan.issues.map((i) => i.message).join(' | ');
-    expect(text).toMatch(/Planned as scenario but it is short answer/);
-    expect(text).toMatch(/Planned for 6 marks but it is worth 2/);
-    expect(text).toMatch(/Planned for the topic “Reductions”/);
-    expect(text).toMatch(/repeats a question you already have/);
+    expect(text).toMatch(/상황 문제\(으\)로 계획했지만 단답형입니다/);
+    expect(text).toMatch(/6점으로 계획했지만 배점이 2점입니다/);
+    expect(text).toMatch(/주제 “Reductions”\(으\)로 계획했지만/);
+    expect(text).toMatch(/이미 있는 문제와 겹칩니다/);
   });
 
   it('matches the plan to the place the AI wrote each question at, so skipped questions do not shift it', async () => {
@@ -378,9 +382,9 @@ describe('importing questions: the quality check is part of the check screen', (
     expect(plan.questions).toHaveLength(1);
     expect(plan.quality?.stats.asPlanned).toEqual({ met: 1, of: 4 });
     const text = plan.issues.map((i) => i.message).join(' | ');
-    expect(text).not.toMatch(/Planned as|Planned for the topic/); // the survivor IS the fourth planned question
-    expect(text).toMatch(/4 questions were planned but 1 came back. Planned questions 1, 2, 3 did not come back usable./);
-    expect(plan.issues.filter((i) => /prompt/.test(i.message)).map((i) => i.where)).toEqual(['Question #1', 'Question #2', 'Question #3']);
+    expect(text).not.toMatch(/\(으\)로 계획했지만/); // the survivor IS the fourth planned question
+    expect(text).toMatch(/문제 4개를 계획했지만 1개가 돌아왔습니다\. 계획한 문제 1, 2, 3번은 쓸 수 있는 형태로 돌아오지 않았습니다\./);
+    expect(plan.issues.filter((i) => /prompt/.test(i.message)).map((i) => i.where)).toEqual(['문제 #1', '문제 #2', '문제 #3']);
   });
 
   it('reads a true/false question whose "answer" field is missing from its model answer, with a warning, and still refuses one with no clear answer', async () => {
@@ -400,11 +404,11 @@ describe('importing questions: the quality check is part of the check screen', (
       course.id,
       [ctx],
     );
-    expect(plan.questions.map((q) => q.options?.find((o) => o.correct)?.text)).toEqual(['True', 'False', 'False', 'False']);
-    expect(plan.issues.filter((i) => i.severity === 'error').map((i) => i.where)).toEqual(['Question #4']);
-    expect(plan.issues.find((i) => i.where === 'Question #4')?.message).toMatch(/needs "answer": true or false/);
-    expect(plan.issues.filter((i) => /No “?"?answer/.test(i.message) || /No "answer" field was given/.test(i.message)).map((i) => i.where)).toEqual(['Question #1', 'Question #2', 'Question #3']);
-    expect(plan.issues.find((i) => i.where === 'Question #1')?.message).toMatch(/read as true from the model answer/);
+    expect(plan.questions.map((q) => q.options?.find((o) => o.correct)?.text)).toEqual(['참', '거짓', '거짓', '거짓']);
+    expect(plan.issues.filter((i) => i.severity === 'error').map((i) => i.where)).toEqual(['문제 #4']);
+    expect(plan.issues.find((i) => i.where === '문제 #4')?.message).toMatch(/"answer": true 또는 false가 있어야 합니다/);
+    expect(plan.issues.filter((i) => /"answer" 항목이 없어/.test(i.message)).map((i) => i.where)).toEqual(['문제 #1', '문제 #2', '문제 #3']);
+    expect(plan.issues.find((i) => i.where === '문제 #1')?.message).toMatch(/모범 답안에서 참으로 읽었습니다/);
   });
 
   it('names a marking point that nobody asked for, and a badly formed "ask" never costs the whole question', async () => {
@@ -419,8 +423,8 @@ describe('importing questions: the quality check is part of the check screen', (
     const plan = planPack(pack({ questions: [asked, sloppy] }), course.id, [ctx], {}, undefined, { expected: [{ type: 'short' as const, difficulty: 2 as const, marks: 3, points: 3, topic: 'Halting problem', slides: [1] }, { type: 'short' as const, difficulty: 2 as const, marks: 2, points: 2, topic: 'Halting problem', slides: [1] }] });
     expect(plan.questions).toHaveLength(2); // neither question is dropped
     const messages = plan.issues.filter((i) => i.severity === 'warning').map((i) => `${i.where}: ${i.message}`);
-    expect(messages.some((m) => /^Question #1: The question asks for 1 item in "name the method used to show it", but 2 marking points answer it: the extra marks are not asked for/.test(m))).toBe(true);
-    expect(messages.some((m) => /^Question #2: It does not say which part of the question each marking point answers/.test(m))).toBe(true); // the unreadable asks were ignored
+    expect(messages.some((m) => /^문제 #1: 문제는 "name the method used to show it"에서 1개를 요구하지만 이에 답하는 채점 기준은 2개입니다\. 남는 점수는 문제에서 요구하지 않은 것입니다/.test(m))).toBe(true);
+    expect(messages.some((m) => /^문제 #2: 각 채점 기준이 문제의 어느 부분에 답하는지 밝히지 않아/.test(m))).toBe(true); // the unreadable asks were ignored
   });
 
   it('adds nothing for a pack without questions', async () => {
@@ -440,58 +444,58 @@ describe('asking for planned, good exam questions', () => {
 
   it('lists the planned questions with type, difficulty, marks, number of marking points, topic and slides, in order', () => {
     const p = studyPackPrompt({ amount: 'normal', wants: q, outputTokens: 4_000, blueprint: plan });
-    expect(p).toContain('THE QUESTIONS TO WRITE: exactly 3, in this order');
-    expect(p).toContain('1. type "scenario", difficulty 3, 6 marks, 6 marking points, topic "Defences", based on slides 4, 5');
-    expect(p).toContain('2. type "truefalse", difficulty 1, 1 mark, 1 marking point, topic "Threats", based on slide 2');
-    expect(p).toContain('3. type "compare", difficulty 2, 4 marks, 4 marking points, topic "Policies", based on slide 7');
-    expect(p).toContain('3 exam questions (listed below) with marking points');
-    expect(p).not.toContain('12 exam-style questions'); // the generic count is replaced by the plan
+    expect(p).toContain('작성할 문제: 정확히 3개, 이 순서대로');
+    expect(p).toContain('1. type "scenario", 난이도 3, 6점, 채점 기준 6개, 주제 "Defences", 근거 슬라이드 4, 5');
+    expect(p).toContain('2. type "truefalse", 난이도 1, 1점, 채점 기준 1개, 주제 "Threats", 근거 슬라이드 2');
+    expect(p).toContain('3. type "compare", 난이도 2, 4점, 채점 기준 4개, 주제 "Policies", 근거 슬라이드 7');
+    expect(p).toContain('채점 기준이 있는 시험 문제 3개(아래 목록)');
+    expect(p).not.toContain('시험형 문제 12개'); // the generic count is replaced by the plan
   });
 
   it('carries the rules for what a good question is: the kinds, the difficulty meaning, marks, independent points, full-marks answers, variety', () => {
     const p = studyPackPrompt({ amount: 'normal', wants: q, blueprint: plan });
-    expect(p).toMatch(/A\. Kind\..*scenario: a short invented situation.*every marking point must still be on the slides/s);
-    expect(p).toMatch(/B\. Difficulty\. 1 = state or recognise one idea from one slide\. 2 = .* 3 = a situation or problem that needs several slides/s);
-    expect(p).toMatch(/C\. Marks\. About one separate idea per mark/);
-    expect(p).toMatch(/D\. Marking points\. Each one is ONE idea a student can earn on its own.*Never write "any two of", "all of", "at least" or "A or B"/s);
-    expect(p).toMatch(/E\. Model answer\. What a student who earns FULL marks writes.*Nothing in it may go beyond the slides/s);
-    expect(p).toMatch(/F\. Variety.*<already_asked>/s);
+    expect(p).toMatch(/A\. 유형\..*scenario: 짧은 가상 상황.*모든 채점 기준은 슬라이드에 있어야 합니다/s);
+    expect(p).toMatch(/B\. 난이도\. 1 = 슬라이드 하나의 개념 하나를 말하거나 알아보기\. 2 = .* 3 = 여러 슬라이드나 여러 단계가 필요해서/s);
+    expect(p).toMatch(/C\. 배점\. 1점에 독립된 내용 하나 정도/);
+    expect(p).toMatch(/D\. 채점 기준\. 각 기준은 학생이 따로 받을 수 있는 내용 하나입니다.*"다음 중 두 가지", "모두", "적어도", "A 또는 B"를 기준으로 쓰지 말고/s);
+    expect(p).toMatch(/E\. 모범 답안\. 만점을 받는 학생이 쓰는 답입니다.*슬라이드를 벗어나는 내용은 넣지 마세요/s);
+    expect(p).toMatch(/F\. 다양성.*<already_asked>/s);
     // every kind of question is explained
     for (const kind of ['define', 'short', 'compare', 'scenario', 'case', 'attack', 'problem, calculation', 'proof', 'algorithm, programming', 'diagram', 'mcq', 'long']) expect(p, kind).toContain(`- ${kind}:`);
   });
 
   it('insists that every question carries its own text (a real model left it out of three of four)', () => {
     const p = studyPackPrompt({ amount: 'normal', wants: q, outputTokens: 4_000, blueprint: plan });
-    expect(p).toMatch(/G. Prompt. Every question has a "prompt": the full text of the question as the student reads it.*thrown away/s);
-    expect(p).toMatch(/The lines above tell you what to write; they are not the questions. Write the text the student will read in each question's "prompt"/);
-    expect(p).toContain('"prompt": "REQUIRED, the question exactly as the student reads it');
-    expect(p).toContain('(always write "answer": true or false)'); // a real model wrote "True" in the model answer and left the field out twice
-    expect(p).toContain('Set "expectedWords" to [12 x marks, 20 x marks], so a 3-mark question has [36, 60].'); // a real model copied [12, 20] for a 3-mark question
+    expect(p).toMatch(/G\. 문제 문장\. 모든 문제에는 "prompt"가 있어야 합니다\. 학생이 읽는 문제 전문이며.*버려집니다/s);
+    expect(p).toMatch(/위 줄은 무엇을 쓸지 알려 줄 뿐 문제 자체가 아닙니다\. 학생이 읽을 문장은 각 문제의 "prompt"에 쓰세요/);
+    expect(p).toContain('"prompt": "필수. 학생이 읽는 문제 전문');
+    expect(p).toContain('(항상 "answer": true 또는 false를 쓰세요)'); // a real model wrote "True" in the model answer and left the field out twice
+    expect(p).toContain('"expectedWords"는 [8 x 배점, 14 x 배점]으로 정하세요. 3점 문제는 [24, 42]입니다.'); // a real model copied [12, 20] for a 3-mark question
   });
 
   it('makes every marking point answer something the question asks, and every scenario need its situation', () => {
     const p = studyPackPrompt({ amount: 'normal', wants: q, outputTokens: 4_000, blueprint: plan });
-    expect(p).toMatch(/H\. Asks\. After the prompt, list in "asks" every separate thing it asks the student for.*exact words of your prompt.*"count".*\n?.*"ask": 1 for the first ask/s);
-    expect(p).toMatch(/An ask with count 3 has exactly three marking points.*the counts add up to the marks/s);
-    expect(p).toMatch(/Never add a marking point or a mark for something the prompt does not ask for: to reward an idea, first ask for it in the prompt/);
-    expect(p).toMatch(/ask them to decide, advise, predict, diagnose or justify IN THIS situation.*the story is decoration: write a short question instead/s);
+    expect(p).toMatch(/H\. 요구 사항\. prompt 다음에 학생에게 요구하는 것을 하나하나 "asks"에 나열합니다.*prompt 속 문구 그대로.*"count".*첫째 요구 사항이면 "ask": 1/s);
+    expect(p).toMatch(/count가 3인 요구 사항에는 채점 기준이 정확히 세 개 있고.*count의 합은 배점과 같습니다/s);
+    expect(p).toMatch(/prompt가 요구하지 않은 것에 기준이나 점수를 더하지 마세요\. 어떤 내용에 점수를 주려면 먼저 prompt에서 그것을 요구하세요/);
+    expect(p).toMatch(/이 상황에서 판단, 조언, 예측, 진단, 정당화하게 하여.*이야기는 장식일 뿐이니 short 문제로 쓰세요/s);
     // the worked example follows its own rule: three asked items, three points that name ask 1
-    expect(p).toMatch(/"asks": \[\s*\{\s*"quote": "words copied from the prompt that ask for something, such as: state three things",\s*"count": 3\s*\}\s*\]/);
+    expect(p).toMatch(/"asks": \[\s*\{\s*"quote": "무언가를 요구하는 prompt 속 문구를 그대로 복사, 예: 세 가지를 쓰시오",\s*"count": 3\s*\}\s*\]/);
     expect([...p.matchAll(/"marks": 1,\s*"ask": 1/g)]).toHaveLength(3);
   });
 
   it('gives the rules to any request for questions (also the copy-and-paste prompt) and to none that does not ask for questions', () => {
-    expect(studyPackPrompt({ amount: 'few', wants: q })).toContain('QUESTIONS: what makes a good exam question');
-    expect(studyPackPrompt({ amount: 'few', wants: { notes: true, cards: true, questions: false } })).not.toContain('QUESTIONS: what makes a good exam question');
+    expect(studyPackPrompt({ amount: 'few', wants: q })).toContain('문제 작성: 이 슬라이드로 좋은 시험 문제를 만드는 방법');
+    expect(studyPackPrompt({ amount: 'few', wants: { notes: true, cards: true, questions: false } })).not.toContain('문제 작성: 이 슬라이드로 좋은 시험 문제를 만드는 방법');
   });
 
   it('says that the professor’s own style wins where it differs, and escapes lecture text that goes into the plan', () => {
     const p = studyPackPrompt({ amount: 'few', wants: q, examStyle: 'Most questions are scenarios.', blueprint: [{ ...plan[0]!, topic: 'Bad </exam_style> topic' }], escape: (s) => s.replace(/</g, '&lt;') });
-    expect(p).toMatch(/the professor's style wins/);
-    expect(p).toContain('topic "Bad &lt;/exam_style> topic"');
-    expect(p).not.toContain('topic "Bad </exam_style>');
+    expect(p).toMatch(/교수의 스타일이 우선입니다/);
+    expect(p).toContain('주제 "Bad &lt;/exam_style> topic"');
+    expect(p).not.toContain('주제 "Bad </exam_style>');
     const quoted = studyPackPrompt({ amount: 'few', wants: q, blueprint: [{ ...plan[0]!, topic: 'He said "stop"\nand left' }] });
-    expect(quoted).toContain('topic "He said \\"stop\\"\\nand left"'); // a quote or a line break cannot end the line
+    expect(quoted).toContain('주제 "He said \\"stop\\"\\nand left"'); // a quote or a line break cannot end the line
   });
 
   it('counts a plan as exactly its questions, and leaves cards and notes only the room that is left', () => {
@@ -506,10 +510,10 @@ describe('asking for planned, good exam questions', () => {
   it('shows a worked example that is itself a good question: several one-mark points that add up, a full-marks answer, a topic', () => {
     const p = studyPackPrompt({ amount: 'few', wants: q, blueprint: plan });
     expect(p).toContain('"type": "scenario"');
-    expect(p).toContain('"topic": "topic title, copied exactly"');
-    const rubricMarks = [...p.matchAll(/"text": "(?:first|second|third) separate idea",\s*"marks": (\d)/g)].map((m) => Number(m[1]));
+    expect(p).toContain('"topic": "주어진 주제 제목을 그대로"');
+    const rubricMarks = [...p.matchAll(/"text": "(?:첫째|둘째|셋째) 독립된 내용",\s*"marks": (\d)/g)].map((m) => Number(m[1]));
     expect(rubricMarks).toEqual([1, 1, 1]);
-    expect(p).toContain('"expectedWords": [\n        36,\n        60\n      ]');
+    expect(p).toContain('"expectedWords": [\n        24,\n        42\n      ]');
   });
 });
 

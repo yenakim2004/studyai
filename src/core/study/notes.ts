@@ -8,7 +8,7 @@ import { unified } from 'unified';
 import type { LectureRow } from '../db/db';
 import type { SlideData } from '../pptx/model';
 import { displayTitle } from '../pptx/topics';
-import { slideToMarkdown } from './markdown';
+import { slideToMarkdown, STUDENT_LABELS } from './markdown';
 import { BASIS_LABEL, type CardRow, type NoteBlock, type NoteKind, type NoteRow } from './types';
 
 type NewBlock = Omit<NoteBlock, 'id' | 'updatedAt'>;
@@ -22,7 +22,7 @@ export function lectureNotesFromSlides(lecture: Pick<LectureRow, 'id' | 'revisio
   return slides
     .filter((s) => s.status === 'ok' && !s.hidden)
     .map((s) => ({
-      text: slideToMarkdown(s, lecture.meta.slideHeight).replace(/^### /, '## '),
+      text: slideToMarkdown(s, lecture.meta.slideHeight, STUDENT_LABELS).replace(/^### /, '## '),
       origin: 'auto' as const,
       basis: 'lecture' as const,
       sources: [{ lectureId: lecture.id, slide: s.index, quote: displayTitle(s).slice(0, 200), verified: true, rev: lecture.revision }],
@@ -44,14 +44,14 @@ export function notesFromCards(cards: CardRow[], kind: NoteKind): NewBlock[] {
     .filter((c) => c.status === 'approved' && types.includes(c.type))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((c) => ({
-      text: c.type === 'comparison' ? `**${c.front.replace(/\*\*/g, '')}**\n\n${c.back}` : `**${c.front.replace(/^What is |\?$/g, '').replace(/\*\*/g, '')}**: ${c.back}`,
+      text: c.type === 'comparison' ? `**${c.front.replace(/\*\*/g, '')}**\n\n${c.back}` : `**${c.front.replace(/^What is |\(이\)란 무엇인가요\?$|\?$/g, '').replace(/\*\*/g, '')}**: ${c.back}`,
       origin: c.origin,
       basis: c.basis,
       sources: c.sources,
     }));
 }
 
-const ORIGIN_LABEL = { user: 'Written by you', imported: 'Imported study pack', auto: 'Auto-extracted from slides', ai: 'AI-generated' } as const;
+const ORIGIN_LABEL = { user: '내가 작성', imported: '가져온 학습 팩', auto: '슬라이드에서 자동 추출', ai: 'AI 생성' } as const;
 export const originLabel = (o: NoteBlock['origin']): string => ORIGIN_LABEL[o];
 
 /** Markdown export with provenance kept visible (origin and sources after each block). */
@@ -59,7 +59,7 @@ export function noteToMarkdown(note: NoteRow, lectureTitle: (id: string) => stri
   const lines = [`# ${note.title}`, ''];
   for (const b of note.blocks) {
     lines.push(b.text.trim(), '');
-    const src = b.sources.map((s) => `${lectureTitle(s.lectureId) ?? 'lecture'}, slide ${s.slide}`).join('; ');
+    const src = b.sources.map((s) => `${lectureTitle(s.lectureId) ?? '강의'}, 슬라이드 ${s.slide}`).join('; ');
     lines.push(`<sub>${originLabel(b.origin)} · ${BASIS_LABEL[b.basis]}${src ? ` · ${src}` : ''}</sub>`, '');
   }
   return lines.join('\n').trim() + '\n';
@@ -89,7 +89,7 @@ function rehypeNeutraliseLinks() {
       node.children = node.children.map((c) => {
         if (c.type === 'element' && c.tagName === 'img') {
           const alt = c.properties?.['alt'];
-          return { type: 'text', value: `[image${typeof alt === 'string' && alt ? `: ${alt}` : ''}]` };
+          return { type: 'text', value: `[이미지${typeof alt === 'string' && alt ? `: ${alt}` : ''}]` };
         }
         walk(c);
         return c;
@@ -119,12 +119,12 @@ const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 export async function noteToHtmlDocument(note: NoteRow, lectureTitle: (id: string) => string | undefined): Promise<string> {
   const body = await markdownToHtml(noteToMarkdown(note, lectureTitle));
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(note.title)}</title>
 <style>
-  body{font:17px/1.65 Georgia,'Times New Roman',serif;color:#18212b;max-width:46rem;margin:2rem auto;padding:0 1rem}
-  h1,h2,h3{font-family:system-ui,sans-serif;line-height:1.25}
-  sub{display:block;font:13px system-ui,sans-serif;color:#5b6876;margin:-.4rem 0 1.2rem}
+  body{font:17px/1.7 system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;color:#18212b;max-width:46rem;margin:2rem auto;padding:0 1rem;word-break:keep-all;overflow-wrap:anywhere}
+  h1,h2,h3{line-height:1.3}
+  sub{display:block;font-size:13px;color:#5b6876;margin:-.4rem 0 1.2rem}
   table{border-collapse:collapse}th,td{border:1px solid #b7c0ca;padding:.3rem .6rem}th{background:#e9edf1}
   code,pre{font-family:Consolas,monospace;background:#e9edf1;border-radius:4px}pre{padding:.7rem;overflow:auto}code{padding:.1em .3em}pre code{padding:0}
   blockquote{border-left:3px solid #b7c0ca;margin-left:0;padding-left:1rem;color:#435060}

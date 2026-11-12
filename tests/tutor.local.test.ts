@@ -32,7 +32,7 @@ describe('context: which slide text leaves the device', () => {
     const big = buildContext([slide(1, 'x'.repeat(LIMITS.excerptText + 500))]);
     expect(big.shortened).toBe(1);
     expect(big.excerpts[0]!.text.length).toBeLessThanOrEqual(LIMITS.excerptText);
-    expect(big.excerpts[0]!.text.endsWith('[…shortened]')).toBe(true);
+    expect(big.excerpts[0]!.text.endsWith('[…줄임]')).toBe(true);
 
     const many = buildContext(Array.from({ length: LIMITS.excerpts + 5 }, (_, i) => slide(i + 1)));
     expect(many.excerpts).toHaveLength(LIMITS.excerpts);
@@ -44,7 +44,7 @@ describe('context: which slide text leaves the device', () => {
   });
 
   it('gives an empty slide a plain note instead of nothing, and sends no pictures', () => {
-    expect(buildContext([slide(1, '   ')]).excerpts[0]!.text).toBe('(this slide has no readable text)');
+    expect(buildContext([slide(1, '   ')]).excerpts[0]!.text).toBe('(이 슬라이드에는 읽을 수 있는 텍스트가 없습니다)');
   });
 
   it('reads real slide text from a parsed deck, without the heading line', async () => {

@@ -11,8 +11,14 @@ const TITLE = '<title>StudyAI</title>';
 export function injectDemoHead(html: string): string {
   for (const marker of [CHARSET, TITLE]) if (!html.includes(marker)) throw new Error(`index.html must contain ${marker} so the demo can adapt it.`);
   const tags = [`<meta http-equiv="Content-Security-Policy" content="${META_CSP}" />`, '<meta name="referrer" content="no-referrer" />'];
-  const described = html.replace(TITLE, () => '<title>StudyAI demo</title>\n    <meta name="description" content="Try StudyAI in your browser with invented sample lectures: slides beside extracted text, search, flashcards and a practice exam. Nothing is uploaded and there is no AI." />');
+  const described = html.replace(TITLE, () => '<title>StudyAI 체험판</title>\n    <meta name="description" content="예제 강의로 자료 보기, 검색, 암기 카드와 모의시험을 체험하세요. 자료를 서버에 업로드하지 않으며 AI 연결은 제공하지 않습니다." />');
   return described.replace(CHARSET, () => [CHARSET, ...tags].join('\n    '));
+}
+
+export function injectSitesHead(html: string): string {
+  if (!html.includes(CHARSET)) throw new Error('Sites 빌드에 charset 표지가 없습니다.');
+  const tags = [`<meta http-equiv="Content-Security-Policy" content="${META_CSP}" />`, '<meta name="referrer" content="no-referrer" />', '<meta name="description" content="PPTX와 PDF 강의 자료로 공부하는 한국어 학습 도우미. 자료와 학습 기록은 이 브라우저에 저장됩니다." />'];
+  return html.replace(CHARSET, () => [CHARSET, ...tags].join('\n    '));
 }
 
 /** The sub-path the demo is served from (GitHub Pages: /<repository>/). Always starts and ends with a slash. */

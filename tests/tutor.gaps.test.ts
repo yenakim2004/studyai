@@ -19,7 +19,7 @@ describe('what a slide does not say', () => {
   it('finds a slide that is only a heading, even with a few words under it', async () => {
     const [a, b] = await slidesOf({ slides: [simpleSlide('Buffer Overflows', ['Introduction to the attack']), simpleSlide('Thanks', [])] });
     expect(kinds(a!)).toEqual(['heading-only']);
-    expect(slideGaps(a!)[0]!.message).toBe('Slide 1 (“Buffer Overflows”) has only a heading: it explains nothing by itself.');
+    expect(slideGaps(a!)[0]!.message).toBe('1번 슬라이드(“Buffer Overflows”)에는 제목만 있어 그 자체로는 아무것도 설명하지 않습니다.');
     expect(kinds(b!)).toContain('heading-only');
   });
 
@@ -27,7 +27,7 @@ describe('what a slide does not say', () => {
     const spec: DeckSpec = { slides: [{ shapes: titleSp(2, 'Memory layout') + bodySp(3, [para('Two regions are shown here with their order from low to high addresses')]) + picture(4, 'rIdImg1', 4500000, 1800000, 3800000, 3600000), ...img }] };
     const [s] = await slidesOf(spec);
     expect(kinds(s!)).toContain('picture-unread');
-    expect(slideGaps(s!).find((g) => g.kind === 'picture-unread')!.message).toMatch(/words are not available as text.*the student can type its words in/);
+    expect(slideGaps(s!).find((g) => g.kind === 'picture-unread')!.message).toMatch(/글자를 텍스트로 읽을 수 없는 그림이 있어.*학생이 그림의 글자를 직접 입력할 수 있습니다/);
     const typed = withPictureText(s!, '4', 'high address\nstack\nheap\nlow address');
     expect(kinds(typed)).not.toContain('picture-unread');
   });
@@ -63,7 +63,7 @@ describe('what a slide does not say', () => {
   it('says that a slide that could not be read is unknown', async () => {
     const [s] = await slidesOf({ slides: [simpleSlide('Fine', ['Some ordinary text that has enough words on it to count as content here'])] });
     const failed: SlideData = { ...s!, status: 'failed' };
-    expect(slideGaps(failed)[0]!.message).toBe('Slide 1 could not be read, so nothing is known about it.');
+    expect(slideGaps(failed)[0]!.message).toBe('1번 슬라이드를 읽지 못해 내용을 전혀 알 수 없습니다.');
   });
 });
 
@@ -72,7 +72,7 @@ describe('the gaps that are sent with a question', () => {
     const slides = await slidesOf({ slides: Array.from({ length: 20 }, (_, i) => simpleSlide(`Heading ${i + 1}`, [])) });
     const all = gapMessages(slides);
     expect(all).toHaveLength(MAX_GAPS);
-    expect(all[0]).toContain('Slide 1');
+    expect(all[0]).toContain('1번 슬라이드');
     expect(new Set(all).size).toBe(all.length);
     expect(gapMessages([slides[0]!, slides[0]!])).toHaveLength(1); // the same slide twice is one gap
     expect(gapMessages([])).toEqual([]);

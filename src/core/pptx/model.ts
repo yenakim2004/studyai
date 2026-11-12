@@ -176,6 +176,11 @@ export interface ShapeElement extends BaseElement {
   /** Text scale applied by "shrink text on overflow" (1 = none). */
   fontScale?: number;
   vertical?: boolean;
+  /**
+   * The words are already drawn by the page image painted over this shape (a PDF page). The shape carries the page's text for
+   * reading, search and citations; a renderer that draws it must keep it invisible (selectable, outlined when active).
+   */
+  textLayer?: true;
 }
 
 export interface LineElement extends BaseElement {
@@ -323,7 +328,11 @@ export interface SlideData {
   coverage: { rawChars: number; capturedChars: number; missing: string[] };
 }
 
+/** The kind of file a lecture was read from. Absent on lectures imported before PDF support: those are PowerPoint. */
+export type LectureFormat = 'pptx' | 'pdf';
+
 export interface DeckMeta {
+  format?: LectureFormat;
   title?: string;
   author?: string;
   created?: string;

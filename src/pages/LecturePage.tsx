@@ -33,9 +33,16 @@ export function LecturePage() {
   const count = slides?.length ?? 0;
   const current = Math.min(Math.max(1, Number(params.get('slide')) || 1), Math.max(1, count));
 
+  // The slide most recently asked for. Keys can arrive faster than the address updates, and each press must step from the last one.
+  const target = useRef(current);
+  useEffect(() => {
+    target.current = current;
+  }, [current]);
+
   const go = useCallback(
     (n: number) => {
       const next = Math.min(Math.max(1, n), Math.max(1, count));
+      target.current = next;
       setParams({ slide: String(next) }, { replace: true });
       setActive(undefined);
     },
@@ -64,8 +71,8 @@ export function LecturePage() {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') go(current + 1);
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(current - 1);
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') go(target.current + 1);
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(target.current - 1);
       else if (e.key === 'Home') go(1);
       else if (e.key === 'End') go(count);
       else return;
@@ -73,7 +80,7 @@ export function LecturePage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, count, go]);
+  }, [count, go]);
 
   const slide = slides?.[current - 1];
   const W = lecture?.meta.slideWidth ?? 9144000;
@@ -90,7 +97,7 @@ export function LecturePage() {
   const topics = lecture?.report.topics ?? [];
   const currentTopic = useMemo(() => topics.find((t) => current >= t.startSlide && current <= t.endSlide), [topics, current]);
 
-  if (lecture === null) return <NotFound what="lecture" />;
+  if (lecture === null) return <NotFound what="강의가" />;
   if (!lecture || !slides) {
     return (
       <div className="p-6">
@@ -100,16 +107,18 @@ export function LecturePage() {
   }
 
   const attn = lecture.report.slidesRequiringAttention.length;
+  /** A PDF lecture is read page by page: say "쪽", not "슬라이드". */
+  const pdf = lecture.meta.format === 'pdf';
   const noteCount = slide?.notes.trim() ? 1 : 0;
   const flagCount = slide?.flags.filter((f) => f.severity !== 'info' && !f.resolved).length ?? 0;
 
   const copyText = async () => {
     if (!slide) return;
     try {
-      await navigator.clipboard.writeText(`${lecture.title}, slide ${slide.index}\n\n${slide.text}${slide.notes ? `\n\nSpeaker notes:\n${slide.notes}` : ''}`);
-      toast.show('Slide text copied.', 'ok');
+      await navigator.clipboard.writeText(`${lecture.title}, 슬라이드 ${slide.index}\n\n${slide.text}${slide.notes ? `\n\n발표자 노트:\n${slide.notes}` : ''}`);
+      toast.show('슬라이드 텍스트를 복사했습니다.', 'ok');
     } catch {
-      toast.show('Your browser blocked copying. Select the text and copy it manually.', 'error');
+      toast.show('브라우저가 복사를 막았습니다. 텍스트를 선택해 직접 복사하세요.', 'error');
     }
   };
 
@@ -131,7 +140,7 @@ export function LecturePage() {
   return (
     <div className="flex flex-col lg:h-dvh">
       <header className="border-b border-rule bg-surface px-4 py-3 md:px-6">
-        <nav aria-label="Breadcrumb" className="text-[13px] text-ink-3">
+        <nav aria-label="이동 경로" className="text-[13px] text-ink-3">
           {course && (
             <Link to={`/course/${course.id}`} className="hover:text-ink hover:underline">
               {course.name}
@@ -143,42 +152,42 @@ export function LecturePage() {
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <ConfidencePill value={lecture.report.confidenceLabel} />
             <Link to={`/lecture/${lecture.id}/report`} className="inline-flex items-center gap-1.5 text-accent underline underline-offset-2">
-              <FileText className="size-4" aria-hidden /> Extraction report{attn > 0 ? ` (${attn} to check)` : ''}
+              <FileText className="size-4" aria-hidden /> 추출 보고서{attn > 0 ? `(확인할 슬라이드 ${attn}장)` : ''}
             </Link>
             <Link to={`/search?lecture=${lecture.id}`} className="inline-flex items-center gap-1.5 text-accent underline underline-offset-2">
-              <Search className="size-4" aria-hidden /> Search this lecture
+              <Search className="size-4" aria-hidden /> 이 강의에서 검색
             </Link>
           </div>
         </div>
       </header>
 
       <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[11.5rem_minmax(0,1fr)]">
-        <aside className="hidden overflow-y-auto border-r border-rule bg-surface p-2 lg:block" aria-label="Slide list">
+        <aside className="hidden overflow-y-auto border-r border-rule bg-surface p-2 lg:block" aria-label="슬라이드 목록">
           <Filmstrip slides={slides} slideWidth={W} slideHeight={H} media={media} current={current} onSelect={go} orientation="vertical" />
         </aside>
 
         <div className="min-h-0 min-w-0 lg:overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1.3fr)_minmax(22rem,1fr)] xl:overflow-hidden">
-        <section className="min-w-0 xl:min-h-0 xl:overflow-y-auto xl:border-r xl:border-rule" aria-label="Slide">
+        <section className="min-w-0 xl:min-h-0 xl:overflow-y-auto xl:border-r xl:border-rule" aria-label="슬라이드">
           <div className="border-b border-rule bg-surface px-3 py-2 lg:hidden">
             <Filmstrip slides={slides} slideWidth={W} slideHeight={H} media={media} current={current} onSelect={go} orientation="horizontal" />
           </div>
           <div className="mx-auto w-full max-w-[60rem] p-3 md:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
               <div className="flex items-center gap-1">
-                <IconButton label="Previous slide (left arrow)" onClick={() => go(current - 1)} disabled={current <= 1}>
+                <IconButton label={pdf ? '이전 쪽(왼쪽 화살표)' : '이전 슬라이드(왼쪽 화살표)'} onClick={() => go(current - 1)} disabled={current <= 1}>
                   <ChevronLeft className="size-5" aria-hidden />
                 </IconButton>
                 <p className="min-w-28 text-center text-sm tabular-nums" aria-live="polite">
-                  Slide {current} of {count}
+                  {pdf ? `${current}/${count}쪽` : `슬라이드 ${current}/${count}`}
                 </p>
-                <IconButton label="Next slide (right arrow)" onClick={() => go(current + 1)} disabled={current >= count}>
+                <IconButton label={pdf ? '다음 쪽(오른쪽 화살표)' : '다음 슬라이드(오른쪽 화살표)'} onClick={() => go(current + 1)} disabled={current >= count}>
                   <ChevronRight className="size-5" aria-hidden />
                 </IconButton>
               </div>
               {topics.length > 1 && (
                 <div className="min-w-0 max-w-full sm:max-w-72">
                   <label htmlFor="topic-jump" className="sr-only">
-                    Jump to topic
+                    주제로 이동
                   </label>
                   <Select id="topic-jump" value={currentTopic?.id ?? ''} onChange={(e) => go(topics.find((t) => t.id === e.target.value)?.startSlide ?? 1)} className="min-h-9 text-[13px]">
                     {topics.map((t) => (
@@ -195,22 +204,22 @@ export function LecturePage() {
               {slide ? (
                 <SlideCanvas slide={slide} slideWidth={W} slideHeight={H} media={media} showDecor={decor} activeId={active} hoverId={hover} onSelect={select} />
               ) : (
-                <p className="text-sm text-ink-2">This lecture has no slides.</p>
+                <p className="text-sm text-ink-2">이 강의에는 슬라이드가 없습니다.</p>
               )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-3">
               <label className="inline-flex min-h-8 items-center gap-2">
                 <input type="checkbox" checked={decor} onChange={(e) => setDecor(e.target.checked)} className="size-4 accent-[var(--accent)]" />
-                Show background graphics (logos, footers)
+                배경 그래픽 보기(로고, 바닥글)
               </label>
-              <p>Click a shape to see its extracted text. Use ← → to change slide.</p>
+              <p>도형을 누르면 추출한 텍스트를 볼 수 있습니다. ← → 키로 슬라이드를 바꿉니다.</p>
             </div>
-            {slide?.hidden && <p className="mt-3 rounded bg-sunken px-3 py-2 text-sm text-ink-2">This slide is hidden in the presentation.</p>}
+            {slide?.hidden && <p className="mt-3 rounded bg-sunken px-3 py-2 text-sm text-ink-2">프레젠테이션에서 숨긴 슬라이드입니다.</p>}
           </div>
         </section>
 
-        <section className="min-w-0 border-t border-rule bg-surface xl:min-h-0 xl:overflow-y-auto xl:border-t-0" aria-label="Extracted content">
+        <section className="min-w-0 border-t border-rule bg-surface xl:min-h-0 xl:overflow-y-auto xl:border-t-0" aria-label="추출한 내용">
           <div className="sticky top-0 z-10 border-b border-rule bg-surface px-4 pt-3 md:px-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="min-w-0 truncate pb-2 text-base font-semibold">
@@ -218,17 +227,17 @@ export function LecturePage() {
               </h2>
               <span className="flex shrink-0 items-center gap-1">
                 <Link to={`/course/${lecture.courseId}/tutor?lecture=${lecture.id}&slide=${current}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] px-2 text-sm text-accent hover:bg-sunken">
-                  <Sparkles className="size-4" aria-hidden /> Ask the tutor
+                  <Sparkles className="size-4" aria-hidden /> 튜터에게 묻기
                 </Link>
-                <IconButton label="Copy slide text" onClick={() => void copyText()} className="-mr-2 -mt-1 size-9">
+                <IconButton label="슬라이드 텍스트 복사" onClick={() => void copyText()} className="-mr-2 -mt-1 size-9">
                   <ClipboardCopy className="size-4" aria-hidden />
                 </IconButton>
               </span>
             </div>
-            <div role="tablist" aria-label="Slide details" className="flex">
-              {tabBtn('content', 'Content')}
-              {tabBtn('notes', 'Speaker notes', noteCount)}
-              {tabBtn('checks', 'Checks', flagCount)}
+            <div role="tablist" aria-label="슬라이드 세부 정보" className="flex">
+              {tabBtn('content', '내용')}
+              {tabBtn('notes', '발표자 노트', noteCount)}
+              {tabBtn('checks', '확인 사항', flagCount)}
             </div>
           </div>
           <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="px-2 py-3 md:px-3">
@@ -240,7 +249,7 @@ export function LecturePage() {
                   {slide.notes.trim() ? (
                     <div className="reading whitespace-pre-wrap">{slide.notes}</div>
                   ) : (
-                    <p className="text-sm text-ink-2">This slide has no speaker notes.</p>
+                    <p className="text-sm text-ink-2">이 슬라이드에는 발표자 노트가 없습니다.</p>
                   )}
                 </div>
               ) : (

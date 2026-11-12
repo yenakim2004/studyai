@@ -5,6 +5,8 @@ import { askAi, refreshAi, useAiServer } from '@/app/ai';
 import { useSetting } from '@/app/data';
 import { AUDIT_MAX_QUESTIONS, auditFindings, auditQuestions, findingText, parseAudit, type AuditFinding, type AuditQuestion } from '@/core/study/audit';
 import { Button } from '@/ui/primitives';
+import { aiBlocker } from '@/ui/ai/blocker';
+import { AI_DESTINATION as dest } from '@/ui/ai/destination';
 
 interface Checked {
   /** What was sent, so a finding can still be matched to its marking point after other points were removed. */
@@ -19,14 +21,15 @@ interface Checked {
  */
 export function AuditPanel({ questions, onRemove }: { questions: AuditQuestion[]; onRemove: (n: number, point: number) => void }) {
   const ai = useAiServer();
-  const [consent, setConsent] = useSetting<string>('aiConsentAt');
+  const [consent, setConsent] = useSetting<string>(dest.consentKey);
   useEffect(() => {
     void refreshAi();
   }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [checked, setChecked] = useState<Checked | undefined>();
-  const usable = ai.phase === 'ready' && (ai.status?.state === 'ready' || ai.status?.state === 'low');
+  const blocker = aiBlocker(ai);
+  const usable = blocker === undefined;
 
   const toSend = useMemo(() => auditQuestions(questions), [questions]);
   const writtenCount = useMemo(() => questions.filter((q) => q.rubric.length > 0 && q.type !== 'mcq' && q.type !== 'truefalse').length, [questions]);
@@ -45,14 +48,13 @@ export function AuditPanel({ questions, onRemove }: { questions: AuditQuestion[]
     try {
       const reply = await askAi({ task: 'audit', questions: toSend });
       if (!reply.ok) setError(reply.message);
-      else if (reply.truncated) setError('The AI’s answer was cut off, so it could not be read. Try again with fewer questions.');
       else {
         const verdicts = parseAudit(reply.text);
-        if (!verdicts) setError('The AI’s answer could not be read.');
+        if (!verdicts) setError('AI의 답을 읽지 못했습니다.');
         else setChecked({ sent: toSend, findings: auditFindings(verdicts, toSend) });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The check failed.');
+      setError(e instanceof Error ? e.message : '점검하지 못했습니다.');
     } finally {
       setBusy(false);
     }
@@ -74,23 +76,23 @@ export function AuditPanel({ questions, onRemove }: { questions: AuditQuestion[]
 
   if (writtenCount === 0) return null;
   return (
-    <section aria-label="AI check of the marking points" className="rounded-[var(--radius-panel)] border border-rule bg-sunken/40 p-4">
+    <section aria-label="AI의 채점 기준 점검" className="rounded-[var(--radius-panel)] border border-rule bg-sunken/40 p-4">
       <h3 className="flex items-center gap-2 font-medium">
-        <Sparkles className="size-4" aria-hidden /> Check the marking points with the AI (optional)
+        <Sparkles className="size-4" aria-hidden /> AI로 채점 기준 점검하기(선택)
       </h3>
       <p className="mt-1 max-w-prose text-[13px] text-ink-3">
-        The checks above count what each question asks for. The AI reads the meaning: does the question itself ask for every marking point? A point it cannot find in the question is padding or a different question. It uses one request, and
-        {writtenCount > AUDIT_MAX_QUESTIONS ? ` looks at the first ${AUDIT_MAX_QUESTIONS} written questions` : ' looks at the written questions'}.
+        위의 점검은 문제마다 요구하는 개수를 셉니다. AI는 의미를 읽습니다. 문제 자체가 모든 채점 기준을 요구하는지 봅니다. 문제에서 찾을 수 없는 기준은 군더더기이거나 다른 문제의 기준입니다. 요청 한 번으로
+        {writtenCount > AUDIT_MAX_QUESTIONS ? ` 처음 ${AUDIT_MAX_QUESTIONS}개의 서술형 문제를 봅니다` : ' 서술형 문제를 봅니다'}.
       </p>
       <details className="mt-2 text-[13px] text-ink-2">
-        <summary className="cursor-pointer">What will be sent to Google</summary>
+        <summary className="cursor-pointer">{dest.sentTo}에 보낼 내용</summary>
         <div className="mt-1 max-h-40 overflow-y-auto rounded-[var(--radius-control)] border border-rule bg-surface p-2">
-          <p>Only the text below: each question, its marking points and its model answer. No slides, files or account details.</p>
+          <p>아래 텍스트만 보냅니다: 문제, 채점 기준, 모범 답안. 슬라이드, 파일, 계정 정보는 보내지 않습니다.</p>
           <ol className="mt-1 list-decimal space-y-1 pl-5">
             {toSend.map((q) => (
               <li key={q.n}>
                 {q.prompt.slice(0, 200)}
-                {q.prompt.length > 200 ? '…' : ''} <span className="text-ink-3">({q.rubric.length} marking points)</span>
+                {q.prompt.length > 200 ? '…' : ''} <span className="text-ink-3">(채점 기준 {q.rubric.length}개)</span>
               </li>
             ))}
           </ol>
@@ -99,19 +101,19 @@ export function AuditPanel({ questions, onRemove }: { questions: AuditQuestion[]
 
       {!usable ? (
         <p className="mt-2 text-sm text-ink-2">
-          {ai.phase === 'unavailable' ? 'AI is not available in this copy of the app.' : ai.phase === 'ready' ? (ai.status?.reasons[0] ?? 'AI is off.') : 'AI is not set up, or you are signed out.'}{' '}
-          {ai.phase !== 'unavailable' && <Link to="/settings" className="text-accent underline underline-offset-2">Open Settings → AI</Link>}
+          {blocker}{' '}
+          {ai.phase === 'ready' && <Link to="/settings" className="text-accent underline underline-offset-2">설정 → AI 열기</Link>}
         </p>
       ) : (
         <div className="mt-3">
           {!consent && (
             <label className="mb-3 flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-0.5 size-4 accent-[var(--accent)]" onChange={(e) => e.target.checked && void setConsent(new Date().toISOString().slice(0, 10))} />
-              <span>I understand this text is sent to Google’s free Gemini service and may be used by Google to improve its products.</span>
+              <span>{dest.consent}</span>
             </label>
           )}
           <Button size="sm" disabled={busy || !consent || toSend.length === 0} onClick={() => void run()}>
-            {busy ? 'Checking…' : 'Check with the AI'}
+            {busy ? '점검하는 중…' : 'AI로 점검'}
           </Button>
         </div>
       )}
@@ -123,27 +125,27 @@ export function AuditPanel({ questions, onRemove }: { questions: AuditQuestion[]
       )}
 
       {checked && (
-        <div className="mt-4 border-t border-rule pt-3" aria-label="What the AI found">
+        <div className="mt-4 border-t border-rule pt-3" aria-label="AI가 찾은 것">
           <p className="text-sm">
-            {checked.findings.length === 0 ? `The AI found nothing to report in the ${checkedCount} question${checkedCount === 1 ? '' : 's'} it read: every marking point is asked for.` : shown.length === 0 ? 'Everything the AI flagged has been dealt with.' : `The AI read ${checkedCount} question${checkedCount === 1 ? '' : 's'} and found ${shown.length} thing${shown.length === 1 ? '' : 's'} to look at. It can be wrong: you decide.`}
+            {checked.findings.length === 0 ? `AI가 읽은 문제 ${checkedCount}개에서 알릴 것을 찾지 못했습니다. 모든 채점 기준을 문제가 요구합니다.` : shown.length === 0 ? 'AI가 표시한 것을 모두 처리했습니다.' : `AI가 문제 ${checkedCount}개를 읽고 살펴볼 것 ${shown.length}개를 찾았습니다. AI도 틀릴 수 있으니 직접 판단하세요.`}
           </p>
           {shown.length > 0 && (
             <ul className="mt-2 flex flex-col gap-2 text-[13px]">
               {shown.map(({ f, point, removable }, i) => (
                 <li key={`${f.n}-${f.point ?? 'q'}-${i}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                   <span>
-                    <span className="font-medium text-ink">Question #{f.n}:</span> {findingText(f, point)}
+                    <span className="font-medium text-ink">문제 #{f.n}:</span> {findingText(f, point)}
                   </span>
                   {point !== undefined && (
-                    <Button size="sm" variant="secondary" disabled={!removable} onClick={() => onRemove(f.n, point - 1)} aria-label={`Remove marking point ${point} of question ${f.n}`}>
-                      Remove this point
+                    <Button size="sm" variant="secondary" disabled={!removable} onClick={() => onRemove(f.n, point - 1)} aria-label={`문제 ${f.n}의 채점 기준 ${point} 삭제`}>
+                      이 기준 삭제
                     </Button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          {shown.some((s) => s.point !== undefined) && <p className="mt-2 text-[13px] text-ink-3">Removing a point also takes its marks off the question, so the marks stay what the question really asks for.</p>}
+          {shown.some((s) => s.point !== undefined) && <p className="mt-2 text-[13px] text-ink-3">기준을 지우면 그 점수도 문제 배점에서 빠지므로, 배점이 문제가 실제로 요구하는 만큼으로 유지됩니다.</p>}
         </div>
       )}
     </section>

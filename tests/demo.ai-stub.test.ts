@@ -24,11 +24,13 @@ describe('the demo AI stub', () => {
     vi.stubGlobal('WebSocket', class { constructor() { throw new Error('the demo must not open a WebSocket'); } });
 
     await stub.refreshAi();
-    await stub.logoutOwner(true);
-    expect(await stub.loginOwner('any key')).toEqual({ ok: false, message: 'AI features are not available in the demo.' });
-    expect(await stub.ownerAction('config', {})).toEqual({ ok: false, error: 'AI features are not available in the demo.' });
+    const why = '데모에서는 AI 기능을 쓸 수 없습니다.';
+    expect(await stub.chatGptAction('disconnect')).toEqual({ ok: false, error: why });
+    expect(await stub.chatGptAction({ model: 'any' })).toEqual({ ok: false, error: why });
+    expect(await stub.connectChatGpt({ account: 'current', forceConsent: false })).toEqual({ ok: false, error: why });
+    expect(await stub.loadChatGptModels()).toEqual({ ok: false, error: why });
     const reply = await stub.askAi({ task: 'tutor', mode: 'explain', question: 'Why?', excerpts: [{ ref: 'S1', lectureTitle: 'L', slide: 1, title: 'T', text: 'x' }], history: [] });
-    expect(reply).toEqual({ ok: false, code: 'unavailable', message: 'AI features are not available in the demo.' });
+    expect(reply).toEqual({ ok: false, code: 'unavailable', message: why });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
@@ -38,6 +40,6 @@ describe('the real client, for contrast', () => {
     const fetchSpy = vi.fn(() => Promise.resolve(new Response('<html></html>', { headers: { 'content-type': 'text/html' } })));
     vi.stubGlobal('fetch', fetchSpy);
     await real.refreshAi();
-    expect(fetchSpy).toHaveBeenCalledWith('/api/health', expect.anything());
+    expect(fetchSpy).toHaveBeenCalledWith('/api/status', expect.anything());
   });
 });

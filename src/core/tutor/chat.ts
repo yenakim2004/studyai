@@ -6,7 +6,7 @@ import { LIMITS, type TutorMode } from './contract';
 /** Tutor conversations are stored only in this browser (and in your backups). The server keeps no chat history. */
 
 export async function createSession(db: StudyDB, input: { courseId: string; title: string; mode: TutorMode }, now = Date.now()): Promise<TutorSessionRow> {
-  const row: TutorSessionRow = { id: newId(), courseId: input.courseId, title: input.title.trim().slice(0, 300) || 'New chat', mode: input.mode, createdAt: now, updatedAt: now };
+  const row: TutorSessionRow = { id: newId(), courseId: input.courseId, title: input.title.trim().slice(0, 300) || '새 대화', mode: input.mode, createdAt: now, updatedAt: now };
   await db.tutorSessions.add(row);
   return row;
 }

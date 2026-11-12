@@ -81,31 +81,31 @@ export function Dashboard() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">대시보드</h1>
 
       {active.length === 0 ? (
         <div className="mt-6">
           <EmptyState
-            title="Start with a course"
+            title="과목부터 만드세요"
             action={
               <Button variant="primary" onClick={openNewCourse}>
-                <Plus className="size-4" aria-hidden /> Create a course
+                <Plus className="size-4" aria-hidden /> 과목 만들기
               </Button>
             }
           >
-            Create a course for each subject, then add the PowerPoint lectures your professor gave you. Everything stays on this device.
+            과목마다 하나씩 만든 뒤 교수님께 받은 PowerPoint나 PDF 강의 자료를 추가하세요. 모든 자료는 이 기기에만 남습니다.
           </EmptyState>
         </div>
       ) : (
         <>
           <section className="mt-6" aria-labelledby="next-h">
             <h2 id="next-h" className="sr-only">
-              Next step
+              다음 할 일
             </h2>
             {rec.kind !== 'all-clear' ? (
               <Link to={rec.href} className="group flex items-center justify-between gap-4 rounded-[var(--radius-panel)] border border-accent/50 bg-accent-soft/50 px-5 py-4 hover:border-accent">
                 <span className="min-w-0">
-                  <span className="block text-[13px] text-ink-3">{resumesHere ? 'Continue where you left off' : 'Next step'}</span>
+                  <span className="block text-[13px] text-ink-3">{resumesHere ? '이어서 공부하기' : '다음 할 일'}</span>
                   <span className="block text-lg font-semibold">{rec.title}</span>
                   <span className="block text-sm text-ink-2">{rec.reason}</span>
                 </span>
@@ -120,10 +120,10 @@ export function Dashboard() {
             {resume && last && !resumesHere && (
               <Link to={`/lecture/${resume.id}?slide=${last.slide}`} className="mt-3 flex items-center justify-between gap-4 rounded-[var(--radius-panel)] border border-rule bg-surface px-4 py-3 text-sm hover:border-accent">
                 <span className="min-w-0">
-                  <span className="block text-[13px] text-ink-3">Continue where you left off</span>
+                  <span className="block text-[13px] text-ink-3">이어서 공부하기</span>
                   <span className="block truncate font-medium">{resume.title}</span>
                   <span className="block text-ink-2">
-                    Slide {Math.min(last.slide, resume.slideCount)} of {resume.slideCount}, {byCourse.get(resume.courseId)?.name}
+                    슬라이드 {Math.min(last.slide, resume.slideCount)}/{resume.slideCount}, {byCourse.get(resume.courseId)?.name}
                   </span>
                 </span>
                 <ArrowRight className="size-4 shrink-0 text-ink-3" aria-hidden />
@@ -133,14 +133,14 @@ export function Dashboard() {
 
           <section className="mt-6" aria-labelledby="today-h">
             <h2 id="today-h" className="sr-only">
-              Today
+              오늘
             </h2>
             <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-[var(--radius-panel)] border border-rule bg-rule">
               {(
                 [
-                  ['Cards due', derived.dueTotal],
-                  ['Cards reviewed today', derived.reviewedToday],
-                  ['Slides studied today', derived.slidesToday],
+                  ['복습할 카드', derived.dueTotal],
+                  ['오늘 복습한 카드', derived.reviewedToday],
+                  ['오늘 공부한 슬라이드', derived.slidesToday],
                 ] as const
               ).map(([k, v]) => (
                 <div key={k} className="bg-surface px-4 py-3">
@@ -154,10 +154,10 @@ export function Dashboard() {
           <section className="mt-8" aria-labelledby="courses-h">
             <div className="flex items-center justify-between">
               <h2 id="courses-h" className="text-lg font-semibold">
-                Courses
+                과목
               </h2>
               <Button size="sm" onClick={openNewCourse}>
-                <Plus className="size-4" aria-hidden /> New course
+                <Plus className="size-4" aria-hidden /> 새 과목
               </Button>
             </div>
             <ul className="mt-3 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
@@ -172,27 +172,27 @@ export function Dashboard() {
                         <span className="min-w-0">
                           <span className="block truncate font-medium">{c.name}</span>
                           <span className="block truncate text-[13px] text-ink-3">
-                            {ls.length} lecture{ls.length === 1 ? '' : 's'}, {total} slides{c.code ? `, ${c.code}` : ''}
+                            강의 {ls.length}개, 슬라이드 {total}장{c.code ? `, ${c.code}` : ''}
                           </span>
-                          {c.goal && <span className="block truncate text-[13px] text-ink-2">Goal: {c.goal}</span>}
+                          {c.goal && <span className="block truncate text-[13px] text-ink-2">목표: {c.goal}</span>}
                         </span>
                       </span>
-                      <span className="flex items-center gap-3 text-sm" aria-label={`${pct}% of slides studied`}>
+                      <span className="flex items-center gap-3 text-sm" aria-label={`슬라이드 ${pct}% 학습`}>
                         <span className="h-2 w-full max-w-40 overflow-hidden rounded-full bg-sunken" role="presentation">
                           <span className="block h-full bg-accent" style={{ width: `${pct}%` }} />
                         </span>
-                        <span className="shrink-0 tabular-nums text-ink-2">{total ? `${pct}% studied` : 'No slides'}</span>
+                        <span className="shrink-0 tabular-nums text-ink-2">{total ? `${pct}% 학습` : '슬라이드 없음'}</span>
                       </span>
                       <span className="text-sm text-ink-2 md:text-right">
-                        {due > 0 ? <span className="font-medium text-ink">{due} card{due === 1 ? '' : 's'} due</span> : 'No cards due'}
+                        {due > 0 ? <span className="font-medium text-ink">복습할 카드 {due}장</span> : '복습할 카드 없음'}
                         {score && (
                           <span className="block text-[13px] text-ink-3">
-                            Last exam {score.percent}%{score.complete ? '' : ' (provisional)'}
+                            최근 시험 {score.percent}%{score.complete ? '' : '(잠정)'}
                           </span>
                         )}
                       </span>
                       <span className="text-sm md:text-right">
-                        {exam ? <span className="font-medium text-ink">{exam}</span> : <span className="text-ink-3">{attention > 0 ? `${attention} slides to check` : 'No exam date'}</span>}
+                        {exam ? <span className="font-medium text-ink">{exam}</span> : <span className="text-ink-3">{attention > 0 ? `확인할 슬라이드 ${attention}장` : '시험 날짜 없음'}</span>}
                       </span>
                     </Link>
                   </li>
@@ -202,12 +202,12 @@ export function Dashboard() {
           </section>
 
           {(derived.weak.length > 0 || derived.strong.length > 0) && (
-            <section className="mt-8 grid gap-6 md:grid-cols-2" aria-label="Topic performance">
+            <section className="mt-8 grid gap-6 md:grid-cols-2" aria-label="주제별 성적">
               <div>
-                <h2 className="text-lg font-semibold">Weak topics</h2>
-                <p className="text-sm text-ink-2">From your submitted practice exams.</p>
+                <h2 className="text-lg font-semibold">약한 주제</h2>
+                <p className="text-sm text-ink-2">제출한 모의시험 기준입니다.</p>
                 {derived.weak.length === 0 ? (
-                  <p className="mt-2 text-sm text-ink-3">None below 60%.</p>
+                  <p className="mt-2 text-sm text-ink-3">60% 미만인 주제가 없습니다.</p>
                 ) : (
                   <ul className="mt-2 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
                     {derived.weak.map((t) => (
@@ -220,10 +220,10 @@ export function Dashboard() {
                 )}
               </div>
               <div>
-                <h2 className="text-lg font-semibold">Strong topics</h2>
-                <p className="text-sm text-ink-2">80% or more, with at least two questions.</p>
+                <h2 className="text-lg font-semibold">강한 주제</h2>
+                <p className="text-sm text-ink-2">문제 두 개 이상에서 80% 이상인 주제입니다.</p>
                 {derived.strong.length === 0 ? (
-                  <p className="mt-2 text-sm text-ink-3">Not enough marked questions yet.</p>
+                  <p className="mt-2 text-sm text-ink-3">아직 채점한 문제가 충분하지 않습니다.</p>
                 ) : (
                   <ul className="mt-2 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
                     {derived.strong.map((t) => (
@@ -241,14 +241,14 @@ export function Dashboard() {
           {exams14.length > 0 && (
             <section className="mt-8" aria-labelledby="exams-h">
               <h2 id="exams-h" className="text-lg font-semibold">
-                Upcoming exams
+                다가오는 시험
               </h2>
               <ul className="mt-3 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
                 {exams14.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
                     <span className="font-medium">{c.name}</span>
                     <span className="text-ink-2">
-                      {new Date(`${c.examDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}, {examLabel(c.examDate)?.replace('Exam ', '')}
+                      {new Date(`${c.examDate}T00:00:00`).toLocaleDateString('ko-KR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}, {examLabel(c.examDate)}
                     </span>
                   </li>
                 ))}
@@ -259,18 +259,18 @@ export function Dashboard() {
           {derived.sessions.length > 0 && (
             <section className="mt-8" aria-labelledby="sess-h">
               <h2 id="sess-h" className="text-lg font-semibold">
-                Recent study sessions
+                최근 공부 기록
               </h2>
               <ul className="mt-3 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
                 {derived.sessions.map((s) => (
                   <li key={`${s.courseId}-${s.start}`} className="grid gap-x-4 px-4 py-2.5 text-sm md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1.2fr)]">
-                    <span className="truncate font-medium">{byCourse.get(s.courseId)?.name ?? 'Course'}</span>
+                    <span className="truncate font-medium">{byCourse.get(s.courseId)?.name ?? '과목'}</span>
                     <span className="text-ink-3">
-                      {new Date(s.start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, {new Date(s.start).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                      {s.end - s.start >= 60_000 ? `, ${Math.round((s.end - s.start) / 60_000)} min` : ''}
+                      {new Date(s.start).toLocaleDateString('ko-KR', { day: 'numeric', month: 'short' })} {new Date(s.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      {s.end - s.start >= 60_000 ? `, ${Math.round((s.end - s.start) / 60_000)}분` : ''}
                     </span>
                     <span className="text-ink-2">
-                      {[s.slides > 0 && `${s.slides} slide${s.slides === 1 ? '' : 's'} viewed`, s.reviews > 0 && `${s.reviews} card${s.reviews === 1 ? '' : 's'} reviewed`, s.exams > 0 && `${s.exams} exam${s.exams === 1 ? '' : 's'}`].filter(Boolean).join(', ')}
+                      {[s.slides > 0 && `슬라이드 ${s.slides}장 봄`, s.reviews > 0 && `카드 ${s.reviews}장 복습`, s.exams > 0 && `시험 ${s.exams}회`].filter(Boolean).join(', ')}
                     </span>
                   </li>
                 ))}
@@ -281,9 +281,9 @@ export function Dashboard() {
           {needsLook.length > 0 && (
             <section className="mt-8" aria-labelledby="look-h">
               <h2 id="look-h" className="text-lg font-semibold">
-                Lectures with slides to check
+                확인할 슬라이드가 있는 강의
               </h2>
-              <p className="mt-1 text-sm text-ink-2">Some content in these lectures could not be read reliably (for example text inside pictures). Review them before relying on the extracted text.</p>
+              <p className="mt-1 text-sm text-ink-2">이 강의들은 일부 내용(예: 그림 속 텍스트)을 정확히 읽지 못했습니다. 추출한 텍스트를 믿기 전에 확인하세요.</p>
               <ul className="mt-3 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
                 {needsLook.map((l) => (
                   <li key={l.id}>
@@ -293,7 +293,7 @@ export function Dashboard() {
                         <span className="block text-[13px] text-ink-3">{byCourse.get(l.courseId)?.name}</span>
                       </span>
                       <span className="inline-flex shrink-0 items-center gap-1 text-bad">
-                        <TriangleAlert className="size-4" aria-hidden /> {l.report.slidesRequiringAttention.length} of {l.slideCount}
+                        <TriangleAlert className="size-4" aria-hidden /> {l.slideCount}장 중 {l.report.slidesRequiringAttention.length}장
                       </span>
                     </Link>
                   </li>

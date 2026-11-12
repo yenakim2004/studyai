@@ -15,7 +15,7 @@ export const tidyScripts = (t: string): string => t.replace(/([_^])\{([^{}\s]+)\
 export function displayTitle(slide: SlideData): string {
   if (slide.title) return tidyScripts(slide.title);
   const first = slide.text.split('\n').find((l) => l.trim() !== '' && !l.trim().startsWith('[Picture'));
-  return first ? tidyScripts(first.replace(/^[-\s]+/, '').slice(0, 80)) : `Slide ${slide.index}`;
+  return first ? tidyScripts(first.replace(/^[-\s]+/, '').slice(0, 80)) : `슬라이드 ${slide.index}`;
 }
 
 export function normaliseTitle(t: string): string {

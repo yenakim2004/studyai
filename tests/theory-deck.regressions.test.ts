@@ -138,13 +138,13 @@ describe('telling the student what a theory slide does not say', () => {
     const d = await load();
     expect(kinds(slide(d, SLIDE.checkIn))).toContain('question-unanswered');
     const g = slideGaps(slide(d, SLIDE.proof)).find((x) => x.kind === 'question-unanswered')!;
-    expect(g.message).toBe('Slide 7 (“A proof by contradiction”) asks a question (“Why is this proof a diagonalization?”) and no answer to it is written on the slide.');
+    expect(g.message).toBe('7번 슬라이드(“A proof by contradiction”)가 질문을 던지지만(“Why is this proof a diagonalization?”) 슬라이드에 답이 적혀 있지 않습니다.');
   });
 
   it('reports labels and arrows whose positions carry the meaning, and not a list of bullets', async () => {
     const d = await load();
     expect(slideGaps(slide(d, SLIDE.regions)).find((g) => g.kind === 'arrangement')!.message).toBe(
-      'Slide 8 (“Regions”) has 4 short labels and 2 arrows or lines placed around the slide: what each one marks or joins is shown only by where it sits, so the text does not say it.',
+      '8번 슬라이드(“Regions”)에는 짧은 라벨 4개와 화살표나 선 2개가 슬라이드 곳곳에 놓여 있습니다. 각각이 무엇을 가리키거나 잇는지는 위치로만 드러나므로 텍스트에는 나타나지 않습니다.',
     );
     expect(kinds(slide(d, SLIDE.bullets))).not.toContain('arrangement');
     expect(kinds(slide(d, SLIDE.proof))).not.toContain('arrangement');
@@ -165,14 +165,14 @@ describe('what the tutor and the question writer are told about questions on sli
     expect(teachingNotes([{ title: slide(d, SLIDE.checkIn).title, text: textOf(d, SLIDE.checkIn) }])).toContain(TEACHING_NOTES.question);
     expect(teachingNotes([{ title: slide(d, SLIDE.proof).title, text: textOf(d, SLIDE.proof) }])).toContain(TEACHING_NOTES.question);
     expect(teachingNotes([{ title: slide(d, SLIDE.bullets).title, text: textOf(d, SLIDE.bullets) }])).not.toContain(TEACHING_NOTES.question);
-    expect(TEACHING_NOTES.question).toMatch(/not answered by the slide/);
-    expect(TEACHING_NOTES.question).toMatch(/Beyond the slides:/);
+    expect(TEACHING_NOTES.question).toMatch(/슬라이드가 답한 것이 아닙니다/);
+    expect(TEACHING_NOTES.question).toMatch(/슬라이드 밖 내용:/);
   });
 
   it('tells the question writer that a question on a slide is not an answer, and that a proof has only the slide’s steps', () => {
-    expect(QUESTION_RULES).toMatch(/I\. Questions printed on slides\./);
-    expect(QUESTION_RULES).toMatch(/Do not use your own answer to it as a marking point/);
-    expect(QUESTION_RULES).toMatch(/Use only the steps the slides show: never add a step, a lemma or a reason the slides leave out/);
+    expect(QUESTION_RULES).toMatch(/I\. 슬라이드에 적힌 질문\./);
+    expect(QUESTION_RULES).toMatch(/그 질문에 대한 내 답을 슬라이드가 준 것처럼 채점 기준이나 모범 답안에 쓰지 마세요/);
+    expect(QUESTION_RULES).toMatch(/슬라이드에 나온 단계만 쓰세요\. 슬라이드가 빠뜨린 단계, 보조정리, 이유를 추가하지 말고/);
   });
 });
 
@@ -245,7 +245,7 @@ describe('a title with a subscript, as a person reads it', () => {
     const s = deck.slides[0]!;
     expect(s.title).toBe('A_{TM} is undecidable'); // the slide's own text, as the search and the AI context see it
     expect(displayTitle(s)).toBe('A_TM is undecidable');
-    expect(slideGaps(s).find((g) => g.kind === 'question-unanswered')!.message).toContain('Slide 1 (“A_TM is undecidable”) asks a question');
+    expect(slideGaps(s).find((g) => g.kind === 'question-unanswered')!.message).toContain('1번 슬라이드(“A_TM is undecidable”)가 질문을 던지지만');
   });
 });
 
@@ -254,8 +254,8 @@ describe('what the AI is told about a slide that asks a question or places its l
     const d = await load();
     const md = lectureToMarkdown({ title: 'Languages and machines', fileHash: d.fileHash, slideCount: d.slides.length, meta: d.meta }, [slide(d, SLIDE.proof), slide(d, SLIDE.regions), slide(d, SLIDE.bullets)], 'L1');
     const caveat = (n: number) => md.split('---').find((s) => s.includes(`### Slide ${n}:`))!;
-    expect(caveat(SLIDE.proof)).toContain('> Extraction caveats: Slide 7 (“A proof by contradiction”) asks a question (“Why is this proof a diagonalization?”) and no answer to it is written on the slide.');
-    expect(caveat(SLIDE.regions)).toMatch(/> Extraction caveats: Slide 8 \(“Regions”\) has 4 short labels and 2 arrows or lines placed around the slide/);
+    expect(caveat(SLIDE.proof)).toContain('> Extraction caveats: 7번 슬라이드(“A proof by contradiction”)가 질문을 던지지만(“Why is this proof a diagonalization?”) 슬라이드에 답이 적혀 있지 않습니다.');
+    expect(caveat(SLIDE.regions)).toMatch(/> Extraction caveats: 8번 슬라이드\(“Regions”\)에는 짧은 라벨 4개와 화살표나 선 2개가 슬라이드 곳곳에 놓여 있습니다/);
     expect(caveat(SLIDE.bullets)).not.toContain('Extraction caveats');
   });
 });
@@ -314,8 +314,8 @@ describe('what the real model’s answers on a theory lecture showed', () => {
   });
 
   it('tells the tutor never to name the block of gaps to the student, and what a gap can be', () => {
-    expect(TUTOR_RULES).toMatch(/never name the block, its tags or "known gaps" to the student/);
-    expect(TUTOR_RULES).toMatch(/a question the slide asks and does not answer, labels and arrows whose positions are not in the text/);
+    expect(TUTOR_RULES).toMatch(/학생에게 블록 이름, 태그, "known gaps"라는 말을 쓰지 마세요/);
+    expect(TUTOR_RULES).toMatch(/슬라이드가 묻고 답하지 않는 질문, 위치가 텍스트에 없는 라벨과 화살표/);
   });
 });
 
@@ -378,15 +378,15 @@ describe('a "scenario" that only restates the slide, and algorithm points that p
     const found = assessQuestions([padded], ctx(parallel)).issues.filter((i) => i.code === 'POINTS_SAME_STEP');
     expect(found).toHaveLength(1);
     expect(found[0]!.point).toBe(3);
-    expect(found[0]!.message).toContain('Marking points 2 and 3 both rest on the same single step of the slides ("Run P1 and P2 on x together until one accepts.")');
+    expect(found[0]!.message).toContain('채점 기준 2과(와) 3이(가) 슬라이드의 같은 한 단계("Run P1 and P2 on x together until one accepts.")에 기대고 있어');
     const honest = algorithm(['Let P1 recognize A and P2 recognize the complement of A', 'T runs P1 and P2 on x together until one accepts', 'If P1 accepts then T accepts', 'If P2 accepts then T rejects']);
     expect(codes(honest, parallel)).not.toContain('POINTS_SAME_STEP');
   });
 
   it('asks the question writer for steps, not "steps or outcomes", never to split a step, and for a new case in a scenario', () => {
-    expect(QUESTION_RULES).toMatch(/Never split one step into two points and never add a point for a set-up sentence to reach the number of marks/);
-    expect(QUESTION_RULES).toMatch(/Ask for "the steps" \(or "the transitions"\), not "steps or outcomes"/);
-    expect(QUESTION_RULES).toMatch(/A situation must bring something the slides do not say/);
-    expect(QUESTION_RULES).toMatch(/a claim or a short argument to judge/);
+    expect(QUESTION_RULES).toMatch(/한 단계를 두 기준으로 나누거나, 배점을 채우려고 준비 문장에 기준을 추가하지 마세요/);
+    expect(QUESTION_RULES).toMatch(/"단계 또는 결과"가 아니라 "단계"\(또는 "전이"\)를 물으세요/);
+    expect(QUESTION_RULES).toMatch(/상황에는 슬라이드에 없는 무언가.*가 있어야 슬라이드의 개념을 적용할 수 있습니다/);
+    expect(QUESTION_RULES).toMatch(/판단할 주장이나 짧은 논증/);
   });
 });

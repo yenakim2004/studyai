@@ -108,16 +108,16 @@ const clip = (s: string, n = 50) => (s.length > n ? `${s.slice(0, n)}…` : s);
 /** The finding as a sentence. `point` is the marking point's number now (it moves up when an earlier point is removed). */
 export function findingText(f: AuditFinding, point = f.point): string {
   const why = f.note?.trim() ? ` ${f.note.trim().replace(/[.!]*$/, '.')}` : '';
-  const label = point !== undefined && f.pointText !== undefined ? `Marking point ${point} ("${clip(f.pointText)}")` : '';
+  const label = point !== undefined && f.pointText !== undefined ? `채점 기준 ${point}("${clip(f.pointText)}")` : '';
   switch (f.kind) {
     case 'not-asked':
-      return `${label} is not asked for by the question.${why}`;
+      return `${label}은(는) 문제에서 요구하지 않습니다.${why}`;
     case 'partly-asked':
-      return `${label} is only partly asked for: the question asks for something related, not this.${why}`;
+      return `${label}은(는) 일부만 요구됩니다. 문제는 관련된 다른 내용을 묻고 있습니다.${why}`;
     case 'unconfirmed':
-      return `${label}: the AI said the question asks for it but could not show where in the question's own words.`;
+      return `${label}: AI는 문제가 이것을 요구한다고 했지만 문제 문장 속 근거를 보여 주지 못했습니다.`;
     case 'decoration':
-      return 'The situation is decoration: the marking points would be the same without it, so this is a recall question with a story in front.';
+      return '상황 설명이 장식에 불과합니다. 상황이 없어도 채점 기준이 같으므로, 이야기를 앞에 붙인 암기 문제입니다.';
   }
 }
 

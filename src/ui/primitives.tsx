@@ -84,16 +84,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
 // ---------------------------------------------------------------------------
 
 const CONF: Record<Confidence, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  high: { label: 'Reliable', cls: 'bg-ok-soft text-ok', Icon: CheckCircle2 },
-  medium: { label: 'Check', cls: 'bg-warn-soft text-warn', Icon: TriangleAlert },
-  low: { label: 'Needs attention', cls: 'bg-bad-soft text-bad', Icon: CircleAlert },
+  high: { label: '신뢰할 수 있음', cls: 'bg-ok-soft text-ok', Icon: CheckCircle2 },
+  medium: { label: '확인 필요', cls: 'bg-warn-soft text-warn', Icon: TriangleAlert },
+  low: { label: '주의 필요', cls: 'bg-bad-soft text-bad', Icon: CircleAlert },
 };
 
 /** Extraction confidence. Never colour-only: icon + word. */
 export function ConfidencePill({ value, compact = false }: { value: Confidence; compact?: boolean }) {
   const { label, cls, Icon } = CONF[value];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`} title={`Extraction confidence: ${label}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`} title={`추출 신뢰도: ${label}`}>
       <Icon className="size-3.5" aria-hidden />
       <span className={compact ? 'sr-only' : ''}>{label}</span>
     </span>
@@ -101,9 +101,9 @@ export function ConfidencePill({ value, compact = false }: { value: Confidence; 
 }
 
 const SEV: Record<Severity, { cls: string; Icon: typeof Info; label: string }> = {
-  info: { cls: 'text-info', Icon: Info, label: 'Note' },
-  warning: { cls: 'text-warn', Icon: TriangleAlert, label: 'Check' },
-  attention: { cls: 'text-bad', Icon: CircleAlert, label: 'Needs attention' },
+  info: { cls: 'text-info', Icon: Info, label: '참고' },
+  warning: { cls: 'text-warn', Icon: TriangleAlert, label: '확인 필요' },
+  attention: { cls: 'text-bad', Icon: CircleAlert, label: '주의 필요' },
 };
 
 export function SeverityIcon({ severity }: { severity: Severity }) {
@@ -173,7 +173,7 @@ export function Dialog({ open, onClose, title, children, footer, wide = false }:
             <h2 id={titleId} className="text-base font-semibold">
               {title}
             </h2>
-            <IconButton label="Close" onClick={onClose} className="-mr-2">
+            <IconButton label="닫기" onClick={onClose} className="-mr-2">
               <X className="size-4" aria-hidden />
             </IconButton>
           </div>
@@ -185,7 +185,7 @@ export function Dialog({ open, onClose, title, children, footer, wide = false }:
   );
 }
 
-export function Spinner({ label = 'Loading' }: { label?: string }) {
+export function Spinner({ label = '불러오는 중' }: { label?: string }) {
   return (
     <span role="status" className="inline-flex items-center gap-2 text-sm text-ink-2">
       <span className="size-4 animate-spin rounded-full border-2 border-rule-strong border-t-accent" aria-hidden />

@@ -84,10 +84,10 @@ describe('next best step', () => {
   it('priorities, highest first, each with a reason', () => {
     // 1. unfinished exam beats everything
     const inProgress = attempt({ status: 'in-progress', submittedAt: undefined });
-    expect(recommendNext(base({ attempts: [inProgress], exams: [exam()], cards: [dueCard()] }))).toMatchObject({ kind: 'resume-exam', title: 'Finish “Midterm prep”', href: '/exam/a1' });
+    expect(recommendNext(base({ attempts: [inProgress], exams: [exam()], cards: [dueCard()] }))).toMatchObject({ kind: 'resume-exam', title: '“Midterm prep” 마치기', href: '/exam/a1' });
     // 2. exam within 14 days and no recent practice
     const near = base({ courses: [course({ examDate: isoIn(5) })], questions: [question()], cards: [dueCard()] });
-    expect(recommendNext(near)).toMatchObject({ kind: 'practice-exam', reason: expect.stringContaining('in 5 days') });
+    expect(recommendNext(near)).toMatchObject({ kind: 'practice-exam', reason: expect.stringContaining('5일 뒤') });
     //    ...but not if you practised yesterday: then due cards win
     expect(recommendNext({ ...near, attempts: [attempt()] }).kind).toBe('review-cards');
     //    ...nor if there is no question bank to practise with
@@ -96,32 +96,32 @@ describe('next best step', () => {
     expect(recommendNext(base({ courses: [course({ examDate: isoIn(40) })], questions: [question()] })).kind).not.toBe('practice-exam');
     expect(recommendNext(base({ courses: [course({ examDate: isoIn(-3) })], questions: [question()] })).kind).not.toBe('practice-exam');
     // 3. due cards
-    expect(recommendNext(base({ cards: [dueCard(), dueCard()] }))).toMatchObject({ kind: 'review-cards', title: 'Review 2 due cards in Algorithms', href: '/course/c1/review' });
+    expect(recommendNext(base({ cards: [dueCard(), dueCard()] }))).toMatchObject({ kind: 'review-cards', title: 'Algorithms에서 복습할 카드 2장 복습하기', href: '/course/c1/review' });
     // new cards that were never studied are not "due"
     expect(recommendNext(base({ cards: [card()] })).kind).toBe('read-lecture');
     // 4. imported items waiting
-    expect(recommendNext(base({ cards: [card({ status: 'pending' })], questions: [question({ status: 'pending' })] }))).toMatchObject({ kind: 'approve-items', title: 'Check 2 imported items in Algorithms' });
+    expect(recommendNext(base({ cards: [card({ status: 'pending' })], questions: [question({ status: 'pending' })] }))).toMatchObject({ kind: 'approve-items', title: 'Algorithms에서 가져온 항목 2개 확인하기' });
   });
 
   it('weak topic, then the least-read lecture, then all clear', () => {
     const q1 = question({ id: 'qa', topic: 'Reductions', marks: 4 });
     const q2 = question({ id: 'qb', topic: 'Reductions', marks: 4 });
     const weak = attempt({ grades: { qa: { marks: 1, max: 4, items: [], by: 'self', gradedAt: 0 }, qb: { marks: 0, max: 4, items: [], by: 'self', gradedAt: 0 } } });
-    expect(recommendNext(base({ questions: [q1, q2], attempts: [weak] }))).toMatchObject({ kind: 'revise-topic', title: 'Revise “Reductions” in Algorithms', reason: expect.stringContaining('13%') });
+    expect(recommendNext(base({ questions: [q1, q2], attempts: [weak] }))).toMatchObject({ kind: 'revise-topic', title: 'Algorithms의 “Reductions” 다시 공부하기', reason: expect.stringContaining('13%') });
     const lectures = [lecture({ id: 'l1', title: 'Read most', order: 0 }), lecture({ id: 'l2', title: 'Read least', order: 1 })];
     const r = recommendNext(base({ lectures, viewed: new Map([['l1', [1, 2, 3, 4, 5, 6]], ['l2', [1]]]) }));
-    expect(r).toMatchObject({ kind: 'read-lecture', title: 'Study “Read least”', reason: 'You have viewed 1 of 10 slides.', href: '/lecture/l2?slide=2' });
+    expect(r).toMatchObject({ kind: 'read-lecture', title: '“Read least” 공부하기', reason: '전체 10장 중 1장을 봤습니다.', href: '/lecture/l2?slide=2' });
     expect(recommendNext(base({ viewed: new Map([['l1', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]]) })).kind).toBe('all-clear');
   });
 
   it('a lecture you have open counts as opened and resumes where you left off, even before any slide counts as viewed', () => {
     const lectures = [lecture({ id: 'l1', title: 'Only one', order: 0 })];
     const opened = recommendNext(base({ lectures, last: { lectureId: 'l1', slide: 4 } }));
-    expect(opened).toMatchObject({ kind: 'read-lecture', reason: 'You left off at slide 4 of 10.', href: '/lecture/l1?slide=4' });
+    expect(opened).toMatchObject({ kind: 'read-lecture', reason: '전체 10장 중 4번째 슬라이드에서 멈췄습니다.', href: '/lecture/l1?slide=4' });
     // with some slides viewed the count is shown too, and a stale slide number is clamped into the lecture
-    expect(recommendNext(base({ lectures, viewed: new Map([['l1', [1, 2]]]), last: { lectureId: 'l1', slide: 99 } }))).toMatchObject({ reason: 'You left off at slide 10 of 10; 2 viewed so far.', href: '/lecture/l1?slide=10' });
+    expect(recommendNext(base({ lectures, viewed: new Map([['l1', [1, 2]]]), last: { lectureId: 'l1', slide: 99 } }))).toMatchObject({ reason: '전체 10장 중 10번째 슬라이드에서 멈췄습니다. 지금까지 2장을 봤습니다.', href: '/lecture/l1?slide=10' });
     // a resume point in a different lecture does not change the wording for this one
-    expect(recommendNext(base({ lectures, last: { lectureId: 'other', slide: 4 } }))).toMatchObject({ reason: 'You have not opened this lecture yet.', href: '/lecture/l1?slide=1' });
+    expect(recommendNext(base({ lectures, last: { lectureId: 'other', slide: 4 } }))).toMatchObject({ reason: '아직 이 강의를 열지 않았습니다.', href: '/lecture/l1?slide=1' });
   });
 
   it('archived courses are never recommended', () => {

@@ -26,10 +26,10 @@ export const BASES = ['lecture', 'derived', 'outside', 'uncertain'] as const;
 export type Basis = (typeof BASES)[number];
 
 export const BASIS_LABEL: Record<Basis, string> = {
-  lecture: 'On the slides',
-  derived: 'Derived from the slides',
-  outside: 'Outside knowledge',
-  uncertain: 'Uncertain',
+  lecture: '슬라이드에 있음',
+  derived: '슬라이드에서 도출',
+  outside: '슬라이드 밖 지식',
+  uncertain: '불확실',
 };
 
 export const STATUSES = ['pending', 'approved', 'rejected'] as const;
@@ -55,14 +55,14 @@ export type SourceRefRow = z.infer<typeof sourceRefSchema>;
 export const CARD_TYPES = ['definition', 'concept', 'formula', 'comparison', 'qa', 'scenario', 'code', 'proof'] as const;
 export type CardType = (typeof CARD_TYPES)[number];
 export const CARD_TYPE_LABEL: Record<CardType, string> = {
-  definition: 'Definition',
-  concept: 'Key concept',
-  formula: 'Formula',
-  comparison: 'Comparison',
-  qa: 'Question and answer',
-  scenario: 'Scenario',
-  code: 'Code reading',
-  proof: 'Proof step',
+  definition: '정의',
+  concept: '핵심 개념',
+  formula: '공식',
+  comparison: '비교',
+  qa: '질문과 답',
+  scenario: '상황',
+  code: '코드 읽기',
+  proof: '증명 단계',
 };
 
 /** FSRS scheduling state (all dates as epoch milliseconds so it serialises cleanly). */
@@ -119,16 +119,16 @@ export type ReviewLogRow = z.infer<typeof reviewLogSchema>;
 export const NOTE_KINDS = ['lecture-notes', 'summary', 'revision-sheet', 'definitions', 'formulas', 'comparison', 'mistakes', 'worked-example', 'last-minute', 'custom'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
 export const NOTE_KIND_LABEL: Record<NoteKind, string> = {
-  'lecture-notes': 'Lecture notes',
-  summary: 'Topic summary',
-  'revision-sheet': 'Quick revision sheet',
-  definitions: 'Important definitions',
-  formulas: 'Formula sheet',
-  comparison: 'Comparison table',
-  mistakes: 'Common mistakes',
-  'worked-example': 'Worked examples',
-  'last-minute': 'Last-minute revision',
-  custom: 'My notes',
+  'lecture-notes': '강의 노트',
+  summary: '주제 요약',
+  'revision-sheet': '빠른 복습 시트',
+  definitions: '중요한 정의',
+  formulas: '공식 정리',
+  comparison: '비교표',
+  mistakes: '자주 하는 실수',
+  'worked-example': '풀이 예제',
+  'last-minute': '시험 직전 복습',
+  custom: '내 노트',
 };
 
 export const noteBlockSchema = z.object({
@@ -180,21 +180,21 @@ export const QUESTION_TYPES = [
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
-  mcq: 'Multiple choice',
-  truefalse: 'True or false',
-  short: 'Short answer',
-  long: 'Long answer',
-  scenario: 'Scenario',
-  case: 'Case study',
-  compare: 'Compare and contrast',
-  define: 'Define and explain',
-  problem: 'Problem solving',
-  calculation: 'Calculation',
-  algorithm: 'Algorithm / pseudocode',
-  programming: 'Programming',
-  proof: 'Proof or reasoning',
-  diagram: 'Diagram interpretation',
-  attack: 'Attack and countermeasure',
+  mcq: '객관식',
+  truefalse: '참/거짓',
+  short: '단답형',
+  long: '서술형',
+  scenario: '상황 문제',
+  case: '사례 연구',
+  compare: '비교와 대조',
+  define: '정의와 설명',
+  problem: '문제 해결',
+  calculation: '계산',
+  algorithm: '알고리즘/의사코드',
+  programming: '프로그래밍',
+  proof: '증명과 추론',
+  diagram: '도식 해석',
+  attack: '공격과 대응',
 };
 
 /** Types that can be marked automatically. */
@@ -366,6 +366,8 @@ export const tutorMessageSchema = z.object({
   sent: z.object({ slides: int.min(0).max(1_000), chars: int.min(0).max(1_000_000), mode: z.enum(TUTOR_MODES) }).optional(),
   /** Assistant only: the shadow cost the server reported (dollars), for the usage display. */
   shadowCostUsd: num.optional(),
+  /** Assistant only: answered on the connected ChatGPT plan, which has no per-answer dollar figure. */
+  paidBy: z.literal('chatgpt-plan').optional(),
   /** A failed request is kept in the thread with its plain-language reason. */
   error: str(500).optional(),
 });

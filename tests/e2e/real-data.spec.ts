@@ -19,48 +19,48 @@ test.describe('real lecture and pack', () => {
     const problems = watchProblems(page);
     await page.goto('/');
     await createCourse(page, 'Real course');
-    await page.locator('input[aria-label="Choose PowerPoint files"]').setInputFiles({ name: basename(lecture!), mimeType: PPTX_MIME, buffer: readFileSync(lecture!) });
-    await expect(page.getByText(/Imported: \d+ slides/)).toBeVisible({ timeout: 30_000 });
-    const slides = Number(/Imported: (\d+) slides/.exec((await page.getByText(/Imported: \d+ slides/).textContent()) ?? '')?.[1]);
+    await page.locator('input[aria-label="강의 파일 선택"]').setInputFiles({ name: basename(lecture!), mimeType: PPTX_MIME, buffer: readFileSync(lecture!) });
+    await expect(page.getByText(/가져옴: 슬라이드 \d+장/)).toBeVisible({ timeout: 30_000 });
+    const slides = Number(/가져옴: 슬라이드 (\d+)장/.exec((await page.getByText(/가져옴: 슬라이드 \d+장/).textContent()) ?? '')?.[1]);
     expect(slides).toBeGreaterThan(0);
 
     // read it
-    await page.getByRole('link', { name: /open|need attention/ }).first().click();
-    await expect(page.getByText(new RegExp(`Slide 1 of ${slides}`))).toBeVisible();
+    await page.getByRole('link', { name: /열기|확인 필요/ }).first().click();
+    await expect(page.getByText(new RegExp(`슬라이드 1/${slides}`))).toBeVisible();
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('section[aria-label="Slide"] .slide-stage')).toBeVisible();
+    await expect(page.locator('section[aria-label="슬라이드"] .slide-stage')).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('real-slide-2.png') });
-    if ((await page.locator('section[aria-label="Slide"] .katex').count()) > 0) {
-      await expect(page.locator('section[aria-label="Extracted content"] .katex').first()).toBeVisible(); // equations render
+    if ((await page.locator('section[aria-label="슬라이드"] .katex').count()) > 0) {
+      await expect(page.locator('section[aria-label="추출한 내용"] .katex').first()).toBeVisible(); // equations render
     }
 
     // import the pack: every quote must be found on the real slides
     await page.getByRole('link', { name: 'Real course' }).first().click();
-    await page.getByRole('button', { name: 'Study packs from your own AI' }).click();
-    await page.getByRole('menuitem', { name: 'Import a study pack…' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Import a study pack' });
-    await dialog.getByLabel('Pack JSON').fill(readFileSync(pack!, 'utf8'));
-    await dialog.getByRole('button', { name: 'Check this pack' }).click();
-    const sources = await dialog.getByText(/cited quotes were found on the slide/).textContent();
+    await page.getByRole('button', { name: '학습 팩 만들기와 가져오기' }).click();
+    await page.getByRole('menuitem', { name: '학습 팩 가져오기…' }).click();
+    const dialog = page.getByRole('dialog', { name: '학습 팩 가져오기' });
+    await dialog.getByLabel('팩 JSON').fill(readFileSync(pack!, 'utf8'));
+    await dialog.getByRole('button', { name: '이 팩 확인' }).click();
+    const sources = await dialog.getByText(/개를 슬라이드에서 찾았습니다/).textContent();
     const m = /(\d+) of (\d+) cited quotes/.exec(sources ?? '');
     expect(m, sources ?? '').not.toBeNull();
     expect(m![1], 'every cited quote should be verified').toBe(m![2]);
     await page.screenshot({ path: testInfo.outputPath('real-pack-import.png') });
-    await dialog.getByRole('button', { name: /^Import \d+ items for review$/ }).click();
+    await dialog.getByRole('button', { name: /^검토할 항목 \d+개 가져오기$/ }).click();
 
-    await page.getByRole('button', { name: 'Approve all with no source problems' }).click();
-    await page.getByRole('link', { name: 'Start review' }).click();
-    await expect(page.getByRole('button', { name: 'Show answer' })).toBeVisible();
+    await page.getByRole('button', { name: /^출처 문제가 없는 (?:카드|문제) 모두 승인$/ }).click();
+    await page.getByRole('link', { name: '복습 시작' }).click();
+    await expect(page.getByRole('button', { name: '답 보기' })).toBeVisible();
     await revealWithKeyboard(page);
     await page.screenshot({ path: testInfo.outputPath('real-card.png') });
     await page.keyboard.press('3');
 
     await page.goBack();
-    await tab(page, 'Practice and exams').click();
-    await page.getByRole('button', { name: 'Approve all with no source problems' }).click();
-    await page.getByRole('button', { name: 'Build an exam' }).click();
-    await page.getByRole('dialog', { name: 'Build a practice exam' }).getByRole('button', { name: 'Start exam' }).click();
-    await expect(page.getByRole('main', { name: 'Question' })).toBeVisible();
+    await tab(page, '연습과 시험').click();
+    await page.getByRole('button', { name: /^출처 문제가 없는 (?:카드|문제) 모두 승인$/ }).click();
+    await page.getByRole('button', { name: '시험 만들기' }).click();
+    await page.getByRole('dialog', { name: '모의시험 만들기' }).getByRole('button', { name: '시험 시작' }).click();
+    await expect(page.getByRole('main', { name: '문제' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('real-exam.png') });
     expect(problems, 'console errors / CSP violations').toEqual([]);
   });

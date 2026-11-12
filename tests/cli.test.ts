@@ -48,11 +48,11 @@ describe('extract', () => {
     expect(md).toContain('### Slide 1: Halting problem');
     expect(md).toContain('**Speaker notes:** Mention Turing 1936');
     expect(r!.slidesNeedingAttention).toEqual([3]); // the picture-only slide
-    expect(r!.caveats.join(' ')).toMatch(/No extractable text/);
+    expect(r!.caveats.join(' ')).toMatch(/추출할 텍스트 없음/);
     const report = JSON.parse(readFileSync(r!.reportPath, 'utf8'));
     expect(report.slides[2].flags.join(' ')).toMatch(/NO_EXTRACTABLE_TEXT/);
     expect(JSON.parse(readFileSync(join(out, 'lectures.json'), 'utf8'))[0]).toMatchObject({ ref: 'L1', slideCount: 3 });
-    expect(formatExtraction([r!])).toContain('SLIDES NEEDING ATTENTION (content may be missing): 3');
+    expect(formatExtraction([r!])).toContain('확인할 슬라이드 (내용이 누락되었을 수 있음): 3');
   });
 });
 
@@ -64,43 +64,43 @@ describe('validate', () => {
     });
     const r = await validatePackFile(p, [pptx]);
     expect(r.ok).toBe(true);
-    expect(r.report).toContain('2 of 2 cited quotes verified');
-    expect(r.report).toContain('OK: the pack is valid');
+    expect(r.report).toContain('인용문 2개 중 2개를 실제 슬라이드에서 확인');
+    expect(r.report).toContain('확인 완료: 학습 팩 형식');
   });
 
   it('rejects invented quotes and tells the AI what the slide really says', async () => {
     const p = writePack({ cards: [{ type: 'qa', front: 'f', back: 'b', lecture: 'L1', basis: 'lecture', sources: [{ lecture: 'L1', slide: 1, quote: 'The halting problem is easily solved in linear time' }] }] });
     const r = await validatePackFile(p, [pptx]);
     expect(r.ok).toBe(false);
-    expect(r.report).toContain('NOT READY');
-    expect(r.report).toMatch(/not found on slide 1/);
-    expect(r.report).toContain('slide 1 actually says: Halting problem');
+    expect(r.report).toContain('수정 필요');
+    expect(r.report).toMatch(/의 1번 슬라이드에서 찾지 못했습니다/);
+    expect(r.report).toContain('1번 슬라이드 원문: Halting problem');
     expect(r.report).toContain('The halting problem is undecidable');
   });
 
   it('rejects out-of-range slides, unmatched lectures, skipped items and unreadable files', async () => {
     const r1 = await validatePackFile(writePack({ cards: [{ type: 'qa', front: 'f', back: 'b', lecture: 'L1', basis: 'derived', sources: [{ lecture: 'L1', slide: 40, quote: 'anything at all goes here' }] }] }), [pptx]);
     expect(r1.ok).toBe(false);
-    expect(r1.report).toMatch(/has only 3 slides/);
+    expect(r1.report).toMatch(/이 강의는 3장뿐이라/);
     const r2 = await validatePackFile(writePack({ lectures: [{ ref: 'L1', title: 'Some other lecture' }], cards: [{ type: 'qa', front: 'f', back: 'b', lecture: 'L1', basis: 'derived' }] }), [pptx]);
     expect(r2.ok).toBe(false);
-    expect(r2.report).toContain('NOT MATCHED to any lecture file');
+    expect(r2.report).toContain('일치하는 강의 파일 없음');
     const r3 = await validatePackFile(writePack({ cards: [{ type: 'bogus', front: '', back: '' }] }), [pptx]);
     expect(r3.ok).toBe(false);
-    expect(r3.report).toMatch(/skipped/i);
+    expect(r3.report).toMatch(/건너뜀/);
     const notPack = join(dir, 'bad.json');
     writeFileSync(notPack, 'not json at all');
-    expect((await validatePackFile(notPack, [pptx])).report).toMatch(/FAILED: No JSON object found/);
+    expect((await validatePackFile(notPack, [pptx])).report).toMatch(/실패: JSON 객체를 찾지 못했습니다/);
     const wrong = join(dir, 'wrong.json');
     writeFileSync(wrong, '{"hello": 1}');
-    expect((await validatePackFile(wrong, [pptx])).report).toMatch(/not a StudyAI pack/);
+    expect((await validatePackFile(wrong, [pptx])).report).toMatch(/StudyAI 팩이 아닙니다/);
   });
 
   it('matches lectures by file hash even when the title differs', async () => {
     const [r] = await extractLectures([pptx], join(dir, 'out2'));
     const p = writePack({ lectures: [{ ref: 'L1', title: 'Renamed', fileHash: r!.fileHash }], cards: [{ type: 'qa', front: 'f', back: 'b', lecture: 'L1', basis: 'derived' }] });
     const v = await validatePackFile(p, [pptx]);
-    expect(v.report).toContain('matched by hash');
+    expect(v.report).toContain('파일 해시로 연결');
   });
 });
 
@@ -109,6 +109,6 @@ describe('prompt', () => {
     const t = promptText({ ...defaultPromptOptions, examStyle: 'Scenario questions only.' });
     expect(t).toContain('"studyai-pack"');
     expect(t).toContain('Scenario questions only.');
-    expect(t).toContain('Do not invent lecture content');
+    expect(t).toContain('강의 내용, 정의, 증명 단계, 시험 규칙, 교수가 선호하는 것을 지어내지 마세요');
   });
 });

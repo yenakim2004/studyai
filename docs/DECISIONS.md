@@ -1,240 +1,145 @@
-# Architecture decision records
+# 구조 결정 기록
 
-Short, dated, and honest about trade-offs. Newest last.
+짧게, 날짜와 함께, 대가를 숨기지 않고 적습니다. 새 기록이 아래에 옵니다. 더 이상 유효하지 않은 결정(다른 AI 엔진, 소유자 키 로그인, 비용 장부, 사이트 전체 잠금)은 ADR-038로 대체되어 지웠고, 번호는 다시 쓰지 않습니다.
 
-## ADR-001 — Local-first single-page app; the backend only exists to hold AI keys
-*2026-10-16 · accepted*
-All lecture data lives in the browser (IndexedDB). The only server component is
-a Cloudflare Worker that (a) serves the static build and (b) proxies AI calls so
-keys never reach the browser. Everything except AI works with no network.
-**Trade-off:** data is per-browser/per-device. Mitigated by one-click backup/restore
-(ZIP) rather than a hosted database (a database would add attack surface and a possible billing path).
+## ADR-001: 로컬 우선 단일 페이지 앱, 서버는 AI 연결을 위해서만
+*2026-10-16 · 채택, 2026-11-12 갱신*
+강의 데이터는 모두 브라우저(IndexedDB)에 있습니다. 서버 구성 요소는 정적 빌드를 내주고 AI 요청을 대신 보내는 Worker 하나이며, 토큰은 브라우저에 닿지 않습니다. AI를 빼면 모든 기능이 네트워크 없이 동작합니다.
+**대가:** 데이터가 브라우저와 기기마다 따로 있습니다. 호스팅 데이터베이스(공격 면과 비용 경로가 늘어남) 대신 한 번에 하는 백업과 복원(ZIP)으로 보완합니다.
 
-## ADR-002 — Parse PPTX in the browser with our own small engine, not a library
-*2026-10-16 · accepted*
-Existing PPTX libraries either only generate files (PptxGenJS) or are server-side and
-trust ZIP headers. The study platform needs *extraction with provenance and honesty
-flags* (what could not be read), plus defensive handling of untrusted files. So the
-engine is ~2 k lines over three tiny dependencies (`fflate` inflate, `fast-xml-parser`,
-nothing else): a defensive ZIP reader, DTD-rejecting XML parser, OPC relationships,
-theme/placeholder inheritance, text/tables/charts/SmartArt/OMML-math extraction,
-and a completeness invariant (every `<a:t>` in a slide must be captured or reported).
-**Validated against:** synthetic fixtures for every construct, an independent
-python-pptx oracle, and several university lecture decks.
-**Limitation (accepted):** previews are reconstructed from XML, not pixel-perfect;
-EMF/WMF images can’t be shown in browsers; no OCR.
+## ADR-002: PPTX는 라이브러리가 아니라 작은 자체 엔진으로 브라우저에서 읽기
+*2026-10-16 · 채택*
+기존 PPTX 라이브러리는 파일을 만들기만 하거나(PptxGenJS) 서버 쪽에서 ZIP 헤더를 그대로 믿습니다. 학습 앱에는 *출처와 정직한 표시가 있는 추출*(무엇을 못 읽었는지)과 믿을 수 없는 파일의 방어적 처리가 필요합니다. 그래서 작은 의존성 둘(`fflate` 압축 해제, `fast-xml-parser`) 위에 약 2천 줄의 엔진을 두었습니다. 방어적 ZIP 읽기, DTD를 거절하는 XML 파서, OPC 관계, 테마·자리 표시자 상속, 글·표·차트·SmartArt·OMML 수식 추출, 빠짐없음 규칙(슬라이드의 모든 `<a:t>`는 잡히거나 보고됨).
+**검증:** 모든 구성 요소의 합성 자료, 독립적인 python-pptx 비교, 여러 대학 강의 파일.
+**받아들인 한계:** 미리 보기는 XML에서 다시 그린 것이라 픽셀 단위로 같지 않음, EMF/WMF는 브라우저에서 표시 불가, OCR 없음.
 
-## ADR-003 — Own ZIP reader instead of `unzipSync`
-*2026-10-16 · accepted*
-Libraries size buffers from the archive’s *declared* sizes. A hostile archive can lie.
-Our reader decompresses in 16 KiB steps and aborts the moment actual output exceeds
-the declared size, enforces per-entry/total/ratio/entry-count limits, rejects ZIP64,
-encryption, duplicate names, path traversal and overlapping entries, and CRC-checks every entry.
+## ADR-003: `unzipSync` 대신 자체 ZIP 읽기
+*2026-10-16 · 채택*
+라이브러리는 압축 파일이 *선언한* 크기로 버퍼를 잡는데, 악의적인 파일은 거짓말을 할 수 있습니다. 자체 읽기는 16 KiB씩 풀다가 실제 출력이 선언한 크기를 넘는 순간 멈추고, 항목·전체·압축률·항목 수 한도를 지키며, ZIP64, 암호화, 같은 이름, 경로 탈출, 겹치는 항목을 거절하고, 모든 항목의 CRC를 확인합니다.
 
-## ADR-004 — XML: reject DTDs outright instead of configuring entity limits
-*2026-10-16 · accepted*
-OOXML never needs a DOCTYPE. Rejecting `<!DOCTYPE`/`<!ENTITY` removes billion-laughs and
-external-entity attacks completely, rather than relying on parser limits.
+## ADR-004: XML은 엔티티 한도를 두는 대신 DTD를 아예 거절
+*2026-10-16 · 채택*
+OOXML에는 DOCTYPE이 필요 없습니다. `<!DOCTYPE`/`<!ENTITY`를 거절하면 엔티티 폭탄과 외부 엔티티 공격이 파서 한도에 기대지 않고 사라집니다.
 
-## ADR-005 — Dexie (IndexedDB) + MiniSearch, no vector DB, no embeddings (yet)
-*2026-10-16 · accepted*
-Per-slide full-text search with prefix/fuzzy matching covers “find the slide about X”
-and is the first retrieval step before any AI call. Embeddings would need either a paid
-API or a large local model; revisit only if retrieval quality proves insufficient.
+## ADR-005: Dexie(IndexedDB) + MiniSearch, 벡터 DB와 임베딩은 (아직) 없음
+*2026-10-16 · 채택*
+접두어·유사 일치가 되는 슬라이드별 전문 검색으로 "X에 관한 슬라이드 찾기"가 되고, AI 요청 전 첫 검색 단계가 됩니다. 임베딩은 유료 API나 큰 로컬 모델이 필요하므로 검색 품질이 모자랄 때만 다시 봅니다.
 
-## ADR-006 — Backend auth is an in-Worker owner login, not Cloudflare Access
-*2026-10-16 · accepted (Phase 3)*
-Cloudflare’s own docs did not confirm that the Zero Trust Free plan can be created without
-a card on file, and the brief forbids adding payment methods. The Worker will verify a
-PBKDF2-hashed owner passphrase and issue a signed, HTTP-only, SameSite=Strict session
-cookie; every API route checks it, plus Host and Origin allowlists. `workers_dev` and
-preview URLs are disabled so the Worker is reachable only via the chosen custom domain.
-*Superseded in part: the owner signs in with a random key, not a passphrase (ADR-020), and the first deployment uses a `*.workers.dev` address with the whole site behind the sign-in gate (ADR-025); preview URLs stay disabled.*
+## ADR-008: 공급망 위생
+*2026-10-16 · 채택*
+pnpm `minimumReleaseAge` 7일(갓 나온 버전 제외), 정확한 버전 고정(`savePrefix: ""`), `esbuild` 말고는 설치 스크립트 끔, 잠금 파일 커밋. 글꼴은 직접 제공(`@fontsource-variable/*`)해서 다른 사이트 요청이 없습니다.
 
-## ADR-007 — Rate/quota counters live in a SQLite-backed Durable Object
-*2026-10-16 · accepted (Phase 3)*
-Atomic counters (daily request cap, concurrency) need a single writer. Durable Objects
-with SQLite are available on Workers Free and fail (not bill) when limits are exceeded.
-KV is eventually consistent and unsuitable for hard caps.
+## ADR-009: 엄격한 설정의 TypeScript 7 (네이티브 컴파일러)
+*2026-10-16 · 채택*
+`strict`, `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `verbatimModuleSyntax`. 타입 검사는 `pnpm build`의 일부입니다.
 
-## ADR-008 — Supply-chain hygiene
-*2026-10-16 · accepted*
-pnpm with `minimumReleaseAge` = 7 days (no brand-new releases), exact version pins
-(`savePrefix: ""`), install scripts disabled except `esbuild`, lockfile committed.
-Fonts are self-hosted (`@fontsource-variable/*`) so the app makes no third-party requests.
+## ADR-010: AI가 쓴 학습 자료는 검사를 거쳐 가져오는 "학습 자료 묶음"으로 들어옴
+*2026-10-16 · 채택*
+학습 엔진은 AI 없이도 쓸모 있어야 하고, 자료를 만드는 데 API 키가 필요하면 안 됩니다. AI(Claude Code 구독, 학생이 이미 쓰는 아무 채팅, 앱의 ChatGPT 튜터)는 JSON 문서 하나(`studyai-pack` v1)를 돌려주고, 앱은 항목마다 검사해서 *대기 중*으로 저장한 뒤 학생의 승인을 기다립니다.
+**AI 결과를 그대로 믿지 않는 이유:** 강의에 없는 내용을 자신 있게 말하는 카드는 시험 전에 없느니만 못합니다. 그래서 모든 항목에 `basis`(lecture / derived / outside / uncertain)와 인용이 있고, 앱이 인용을 실제 슬라이드에서 찾습니다.
+**대가:** 직접 가져오는 경우 강의마다 한 번 복사해 가져오는 단계가 있습니다. 앱에서 생성해도 같은 형식, 검사, 승인을 거칩니다.
 
-## ADR-009 — TypeScript 7 (native compiler) with strict flags
-*2026-10-16 · accepted*
-`strict`, `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `verbatimModuleSyntax`.
-The type-check runs clean and is part of `pnpm build`.
+## ADR-011: 인용 확인은 "슬라이드에 있음"이지 "맞음"이 아님
+*2026-10-16 · 채택*
+인용의 정규화한 형태(Markdown·LaTeX 명령, 문장 부호, 대소문자, 공백 제거, "..." 허용)가 인용한 슬라이드의 정규화한 글에 있으면 "확인됨"입니다. 인용을 찾지 못한 "lecture" 주장은 확인 안 됨으로 보여 줍니다.
+**증명하지 않는 것:** 카드가 잘 쓰였는지, 완전한지, 인용이 주장을 뒷받침하는지. 지어낸 인용은 없애지만 카드를 읽는 일을 대신하지 않습니다. 화면과 문서가 그렇게 말합니다.
 
-## ADR-010 — AI-written study material enters as an imported, verified "study pack"
-*2026-10-16 · accepted (Phase 2)*
-The learning engine must be useful before any AI service is wired in, and generating material must not need an API key. So the app never calls a model to create cards, notes or questions in Phase 2. Instead, the AI (Claude Code under the Max subscription, or any chat the student already uses) returns one JSON document (`studyai-pack` v1) that the app validates item by item. Items are stored as *pending* and are unused until the student approves them.
-**Why not just trust the AI's output:** a card that confidently states something the lecture never said is worse than no card before an exam. Every item therefore carries a `basis` (lecture / derived / outside / uncertain) and quotes, and the app looks each quote up on the real slide.
-**Trade-off:** one manual copy/import step per lecture. Phase 3 can automate the call, but the same pack format, validation and approval gate will apply to it.
+## ADR-012: 플래시카드 일정은 FSRS(ts-fsrs)
+*2026-10-16 · 채택*
+FSRS는 유지되는 공개 간격 반복 알고리즘이며 작은 순수 TypeScript 구현이 로컬에서 돕니다. 일정 상태는 카드마다 복습 기록과 함께 저장해 나중에 매개변수를 맞출 수 있습니다. 답 버튼에 다음 간격을 미리 보여 줍니다. 고정한 `ts-fsrs` 5.4.2는 FSRS-6을 구현합니다.
 
-## ADR-011 — Quote verification: found-on-slide, not correct
-*2026-10-16 · accepted (Phase 2)*
-A quote is "verified" when its normalised form (Markdown and LaTeX commands, punctuation, case and spacing stripped; "..." allowed) occurs in the normalised text of the cited slide. A "lecture" claim without a found quote is displayed as unverified.
-**What this does not prove:** that the card is well written, complete, or that the quote supports the claim. It removes fabricated citations; it does not replace reading the card. The UI and docs say so.
+## ADR-013: 서술형 답은 스스로 채점하고, 점수는 언제나 "불확실"
+*2026-10-16 · 채택*
+자동 채점이 정확한 것은 객관식과 참거짓뿐입니다. 서술형은 모범 답안과 채점 기준을 보여 주고 학생이 점수를 매기며, 키워드 일치는 힌트일 뿐입니다. 서술형 점수는 모두 불확실로 저장하고 채점자와 같다고 주장하지 않습니다. AI 채점은 선택적인 두 번째 의견이며 유일한 점수가 되지 않습니다.
 
-## ADR-012 — FSRS (ts-fsrs) for flashcard scheduling
-*2026-10-16 · accepted (Phase 2)*
-FSRS is a maintained, open spaced-repetition algorithm with a small, pure TypeScript implementation that runs locally. Scheduling state is stored per card with a review log, so a future parameter fit stays possible. Intervals are previewed on the answer buttons.
-*Correction, 2026-10-23: this record first said "FSRS-5". The pinned `ts-fsrs` 5.4.2 implements FSRS-6 (`FSRSVersion` reports "v5.4.2 using FSRS-6.0" and the default parameter set has 21 weights); the decision itself is unchanged.*
+## ADR-014: "봤음"은 슬라이드에 3초, "멈춘 곳"은 바로 저장
+*2026-10-16 · 채택*
+넘겨 본 슬라이드를 진도로 세지 않도록 3초 동안 화면에 있어야 봤음으로 칩니다. 이어 볼 위치는 바로 저장해서 다음에 같은 슬라이드로 돌아옵니다. 대시보드는 둘 다 써서, 슬라이드 N에서 열려 있는 강의는 아직 봤음이 없어도 "슬라이드 N에서 멈췄습니다"라고 보여 줍니다.
 
-## ADR-013 — Written answers are self-marked in Phase 2; marks are always "uncertain"
-*2026-10-16 · accepted (Phase 2)*
-Auto-marking is exact only for MCQ and true/false. For written answers the app shows the model answer and rubric and the student awards the marks; keyword hits are hints, not scores. Every written mark is stored as uncertain, and the app never claims to match an examiner. AI marking (Phase 3) will be an optional second opinion, never the only mark.
+## ADR-015: 앱 안 생성기 대신 lecture-pack 스킬과 묶은 명령줄 도구
+*2026-10-16 · 채택*
+Claude Code는 파일은 읽지만 브라우저 데이터베이스는 못 읽으므로, 같은 추출·검사 코드를 Node 명령줄 도구(`extract`, `validate`, `prompt`)로 묶었습니다. 스킬이 이를 씁니다: 로컬에서 추출 → 슬라이드 읽기 → 묶음 쓰기 → 모든 인용을 찾을 때까지 `validate`. 스킬은 엄격한 규칙(API·키·네트워크 없음, 강의 파일은 로컬에, 인용을 지어내지 않음)을 밝히고, `tests/skill.test.ts`는 스킬과 코드가 어긋나면 실패합니다.
 
-## ADR-014 — "Viewed" means 3 seconds on a slide; "left off" is saved immediately
-*2026-10-16 · accepted (Phase 2)*
-Progress should not count slides the student flicked past, so a slide counts as viewed after 3 s on screen. The resume position is saved at once so the next visit returns to the right slide. The dashboard uses both: a lecture that is open at slide N reads "You left off at slide N" even when nothing counts as viewed yet (a bug found by the end-to-end suite, fixed with a unit test).
+## ADR-022: 프롬프트와 모델은 서버가 정함
+*2026-10-16 · 채택, 2026-11-12 갱신*
+브라우저는 구조화한 데이터(질문, 고른 슬라이드 글, 채점 기준)를 보내고, 서버가 프롬프트를 만들고 연결된 계정의 목록에서 모델을 고릅니다. 강의 글, 답, 출제 안내는 믿을 수 없는 입력이므로 이스케이프해서 고정 규칙이 데이터라고 밝힌 구분 블록 안에 넣습니다. 그래서 이 경로는 범용 대리 요청으로 쓸 수 없고, 모델 출력은 쓰기 전에 검사합니다(인용 표시, 실제 채점 기준에 맞춘 JSON, 일반 묶음 검사).
 
-## ADR-015 — Lecture-pack skill and a bundled CLI instead of an in-app generator
-*2026-10-16 · accepted (Phase 2)*
-Claude Code can read files but not the browser's database, so the same extraction and validation code is bundled as a Node CLI (`extract`, `validate`, `prompt`). The skill drives it: extract locally → read the slides → write the pack → `validate` until every quote is found. The skill states the hard rules (no API, no key, no network, lecture files stay local, never fake a quote), and `tests/skill.test.ts` fails if the skill and the code drift apart.
+## ADR-026: 그림 속 글자는 학생이 적고, 추측하지 않음
+*채택*
+그림만 있는 슬라이드가 있습니다. 추출기는 "그림이 있다"고 말할 수 있지만 튜터는 그것으로 가르칠 수 없습니다. 브라우저 OCR(도식 글자를 망가뜨리고 수 MB와 거짓 자신감을 더함), 그림을 비전 모델에 보내기("슬라이드 글만 기기를 떠난다"를 깨고 비용이 듦), 직접 적기를 비교했습니다.
+* 그림마다 "그림 속 글자" 칸이 있습니다. 적은 글은 그 슬라이드 행에 저장되고, AI로 보낼 때 *학생이 적음*으로 표시되며(슬라이드로 인용할 수 있지만 오타가 있을 수 있음), 다시 가져와도 남고, 백업에 들어갑니다.
+* 적으면 그 슬라이드의 "글이 있을 수 있는 그림" 경고가 풀립니다. 슬라이드의 의미 있는 부분을 덮는 그림만 표시하므로 로고와 아이콘은 경고를 내지 않고, `image3.png` 같은 파일 이름을 설명처럼 보여 주지 않습니다.
+* AI 규칙: 읽을 수 없는 그림이 무엇을 보여 주는지 묘사하거나 추측하지 말고, 읽을 수 없다고 말한 뒤 글자를 적어 보라고 제안합니다.
 
-## ADR-016 — Claude with included API credits is an optional provider (Gemini Free Tier comes first); everything fails closed
-*2026-10-16 · accepted (Phase 3a)*
-The design goal is $0.00 extra, and Anthropic's official docs say that some subscription plans include monthly API credits with no card needed and that requests simply stop when the balance reaches zero — unless purchased credits, auto-reload or invoiced billing sit behind it. The design therefore (a) keeps AI off until the owner has confirmed each of those conditions, dated and re-confirmed every 30 days, (b) enforces its own daily and monthly budgets below the credits, and (c) treats every uncertainty as "stop", never "continue". The owner later set the order: Gemini Free Tier is the immediate Phase 3 objective and Claude stays an optional provider; both ship disabled.
-**Trade-off:** the tutor can stop while money would still have been available. Accepted: preventing a charge outranks availability.
+## ADR-027: 순서대로 가르치고, 질문에 필요한 것만 보냄
+*채택*
+**길잡이 수업**은 강의 자체의 주제를 슬라이드 순서대로 최대 네 슬라이드씩 나눕니다(작은 이웃 주제는 묶고 긴 주제는 고르게 자름). 한 부분을 고르면 그 슬라이드가 선택되고 질문이 쓰이며, 보내기 전에 정확한 슬라이드 글을 보여 줍니다. 슬라이드 범위로 생성에 보낼 내용을 줄일 수 있고, 기본으로 강의 전체를 보내지 않습니다.
 
-## ADR-017 — Reserve worst case, settle to real usage; only a definite refusal is refunded
-*2026-10-16 · accepted (Phase 3a)*
-Budget checks happen *before* a call, against everything already in flight, inside one atomic store transaction. After the call the reservation is settled to the provider-reported usage. A timeout, 5xx, dropped connection or unreadable answer may still have been billed, so it stays charged at the full reservation until the owner reconciles it against the Console. This makes delayed or missing usage reports only ever make the app more cautious.
-**Why not read the Console balance:** it needs an organization-wide Admin key (more risk than the problem), so the Console is attested by the owner and used as an independent backstop (credit balance and a workspace spend limit).
+## ADR-029: 튜터의 답은 믿지 않고 앱이 확인함
+*채택*
+답을 슬라이드와 맞대어 읽어 보니 프롬프트만으로는 막지 못하는 문제가 있어서 규칙과 기기 쪽 검사를 함께 씁니다.
+* **인용 표시는 요청 하나 안에서만 의미가 있습니다.** 답을 저장하기 전에 표시를 실제 슬라이드 번호로 바꾸고, 보내지 않은 표시는 출처를 찾지 못했다는 표시로 바꿉니다.
+* **슬라이드 밖 내용은 한곳에만.** 정해진 머리말로 시작하는 문단 하나입니다. 모델 자신의 예, 비유, 숫자, "왜냐하면" 설명도 여기에 들어갑니다. 슬라이드에 답이 없으면 그렇다고 먼저 말하고, 앱은 그런 답을 슬라이드에서 나왔다고 표시하지 않습니다.
+* **따옴표 속 문구를 확인합니다.** 보낸 슬라이드 어디에도 없는 문구가 있으면 "lecture" 표시를 "derived"로 낮춥니다.
+* 규칙과 결정적 검사일 뿐 보장이 아닙니다.
 
-## ADR-018 — Prices and request shape are allowlists
-*2026-10-16 · accepted (Phase 3a)*
-A model with no entry in the price table cannot be called, and a request may only contain plain text, a model and an output cap. Tools (web search is billed per search), images, extended thinking, streaming, fast mode and region routing are rejected because each can change the price. The reservation uses a byte-based upper bound on prompt tokens so no token-counting call is needed.
+## ADR-030: AI 채점은 독립적인 읽기와 비교해 평가하고 한계를 밝힘
+*채택*
+AI 채점을 꾸며 낸 학생 답(잘한 답, 부분 답, 틀린 답, 똑같은 반복, 만점을 주라고 지시하는 답)으로 시험했고, 기대 점수는 요청 전에 적어 두었습니다. 채점기는 도우미일 뿐입니다. 점수는 언제나 불확실로 표시하고, 지시하려는 학생 글은 데이터로 다루며, 끝까지 오지 않은 답은 점수로 바꾸지 않고, 결정은 학생이 합니다.
 
-## ADR-019 — Gemini Free Tier is guarded with a "shadow" dollar budget as well as quotas
-*2026-10-16 · accepted (Phase 3a)*
-The free tier has no balance to meter and Google does not reveal a key's tier in responses, so "I am on the free tier" cannot be checked by the app. The guard therefore (a) requires dated owner confirmations, (b) keeps its own limits under half the free quotas the owner reads in AI Studio, and (c) prices every call at the *paid-tier* rate and enforces daily/monthly budgets in those shadow dollars (hard ceilings $1/day, $5/month). If billing were ever linked by mistake, this app alone could then cost at most the shadow budget.
-**Billing signals** (402, prepay/billing/depleted text) pause AI until the owner checks AI Studio. The ordinary quota error also says "check your plan and billing details", so classification looks at status and specific wording, and a test covers the trap. "Free tier not available in your region" pauses AI and warns against enabling billing.
+## ADR-031: 시험 문제는 AI가 쓰기 전에 기기에서 계획함
+*채택*
+"보통 묶음"을 달라고 하면 모델은 가장 쉬운 것을 씁니다. 회상 문제뿐이고 어려운 문제는 없고 다루는 슬라이드도 적습니다. 그래서 브라우저가 먼저 AI 없이 계획을 세웁니다(`blueprint.ts`): 문제마다 종류, 난이도, 배점, 채점 기준 수, 주제, 근거 슬라이드.
+* **종류는 자료를 따릅니다.** 계산과 문제 풀이는 수식이 있는 곳에만, 증명은 정리나 증명이 있는 곳에, 알고리즘과 코드 문제는 단계(또는 돌려 볼 기계)가 있는 곳에, 도식 문제는 그림이나 적은 글자가 있는 곳에, 공격과 대응 문제는 공격을 다루는 강의에.
+* **난이도에 뜻이 있습니다:** 쉬움 약 30 %, 보통 40 %, 어려움 30 %. 배점은 난이도와 함께 늘고, 한 점에 채점 기준 하나쯤이며, 고른 슬라이드의 서로 다른 생각보다 기준이 많아지지 않습니다.
+* **교수의 안내가 방향을 정합니다.** 안내 전문도 모델에 보내며, 교수의 방식이 우선이라는 규칙과 함께 보냅니다. 안내가 없으면 계획은 실제 시험 예측이 아니라 적당한 섞음이라고 밝힙니다.
+* **고루 다루고 되풀이하지 않습니다.** 다루지 않은 슬라이드의 주제를 먼저 고르고, 같은 슬라이드에 같은 종류를 두 번 계획하지 않으며, 강의 자체에 관한 슬라이드(목표, 개요, 제목, 정리, 확인 질문)는 문제의 근거로 쓰지 않습니다.
+* **여러 요청.** 답 하나에 담을 수 있는 양에 한계가 있어서 여덟 문제 계획은 두세 요청이 되고, 요청마다 보여 주고 승인을 받습니다. 서버가 구조화한 계획으로 프롬프트를 만들므로(엄격한 스키마, 제목과 이전 문제 이스케이프) 브라우저는 지시를 넣을 수 없습니다.
 
-## ADR-020 — The owner signs in with a 256-bit key, not a passphrase
-*2026-10-16 · accepted (Phase 3b)*
-Password stretching (PBKDF2/scrypt) would use more CPU than the free Workers plan allows per request, and it is unnecessary for a random 256-bit key. `pnpm owner:keygen` makes the key once; only its SHA-256 is stored (as a Cloudflare secret), so the key cannot be recovered from the server. The session is an HMAC-signed, expiring `__Host-` cookie (HttpOnly, Secure, SameSite=Strict). Wrong keys lock the sender's address (an IPv6 address counts by its /64) with growing delays, but the correct key is never refused and there is no global lock, so nobody can lock the owner out (see ADR-024); "sign out everywhere" bumps a counter in the Durable Object. This replaces the PBKDF2 idea in ADR-006.
-**Trade-off:** the key is long and must live in a password manager; losing it means generating a new one and replacing the secret.
+## ADR-032: 생성한 시험 문제는 모델에게 준 규칙대로인지 확인함
+*채택*
+프롬프트는 문제 종류마다 무엇인지, 난이도와 배점의 뜻, 채점 기준은 따로 얻을 수 있는 생각 하나여야 한다는 것, 모범 답안은 슬라이드만으로 만점을 받아야 한다는 것, 문제가 되풀이되면 안 된다는 것을 밝힙니다(`QUESTION_RULES`). 가져오기 화면은 AI 없이 결과를 확인합니다(`pack-quality.ts`): 배점과 기준, "둘 중 아무거나" 기준, 겹치는 기준, 만점을 못 받는 모범 답안, 인용한 슬라이드에 없는 기준, 복사, 회상뿐인 묶음, 계획을 무시한 문제. 승인 전의 조언이며 아무것도 버리지 않습니다.
 
-## ADR-021 — The guard runs inside a single Durable Object
-*2026-10-16 · accepted (Phase 3b)*
-Budget reservations must be atomic across requests. A SQLite-backed Durable Object is single-threaded and its storage is synchronous, so a reservation is one read-modify-write with no `await` in between: two requests cannot both see the same remaining budget. The whole guard (and the provider call) therefore runs in the Durable Object; the Worker only authenticates and forwards. Tested over HTTP: 12 simultaneous requests against a budget for two admit exactly two.
-**Trade-off:** one DO instance serialises settings and accounting (fine for one owner); a DO storage failure means the budget is unknown, so AI refuses to run.
+## ADR-033: 슬라이드에 없는 것을 밝히고, 수식·표·알고리즘·증명·기계·도식을 조심해서 가르침
+*채택*
+* **빠진 내용은 기기에서 찾습니다**(`gaps.ts`). 보내기 전에 학생에게 보여 주고, 사실 목록으로 슬라이드와 함께 보냅니다: 제목뿐인 슬라이드, 글자를 알 수 없는 그림, 슬라이드에 없는 것을 가리키는 말("그림 3 참조"), 슬라이드가 정의하지 않은 기호가 있는 수식, 배치를 추정한 도식, 슬라이드가 묻고 답하지 않은 질문. 튜터는 해당 슬라이드가 나올 때 한 번 말하고 추측으로 채우지 않습니다.
+* **내용에 맞춘 수업 지침**은 실제로 슬라이드에 있는 것에만 붙습니다: 수식(슬라이드가 정의한 기호로만), 표(행마다, 더하지 않음), 알고리즘과 코드(슬라이드의 단계 순서대로), 도식(이름표만), 유도와 증명(슬라이드의 단계, 건너뛴 단계는 채우지 않고 밝힘), 기계(한 단계씩, 상태나 전이를 더하지 않음), 슬라이드의 질문(질문은 답이 아님).
+* **수업 기억:** 뒤 부분은 실제로 배운 부분을 이름으로 이어 갑니다.
 
-## ADR-022 — Prompts, model and output length are chosen by the server
-*2026-10-16 · accepted (Phase 3b)*
-The browser sends structured data (a question, selected slide text, a rubric); the server builds the prompt, picks the model and caps the output. Lecture text, answers and exam instructions are untrusted: they are escaped and placed inside delimited blocks that the fixed rules declare to be data. The endpoint therefore cannot be used as a general-purpose proxy, and model output is validated before it is used (citation labels, JSON against the real rubric, packs through the normal import check).
+## ADR-034: 모든 채점 기준은 문제가 묻는 무엇인가에 답해야 함
+*채택*
+잘 생긴 문제도 어긋날 수 있습니다. 다섯 가지를 묻는 6점 문제, 아무도 묻지 않은 것을 주는 채점 기준, 이야기를 지워도 답이 같은 "시나리오".
+* **모델이 무엇을 묻는지 밝힙니다(규칙 H).** 문제 뒤에 `asks`를 적습니다: 무엇인가를 묻는 문제의 정확한 문구와 각각 몇 개를 원하는지. 모든 채점 기준은 어느 물음에 답하는지 밝힙니다.
+* **기기가 확인합니다:** 문제에 없는 물음 문구, 원하는 수와 다른 기준 수, 어느 물음에도 답하지 않는 기준, 수와 맞지 않는 숫자 낱말, 슬라이드가 이미 말한 것 말고 보태는 것이 없는 시나리오.
+* **AI가 뜻을 읽습니다(선택, 요청 하나, `audit`).** 채점 기준마다 문제가 그것을 묻는지 말하고("예"에는 정확한 문구가 필요하며 앱이 확인), 한 번 눌러 부풀린 기준과 그 배점을 뺍니다.
+* 한계: 문구로는 물었지만 다른 것에 답하는 기준은 뜻을 읽어야만 보이고, 그 읽기도 틀릴 수 있으니 조언만 합니다.
 
-## ADR-023 — Confirmations and the first real request are explicit owner actions
-*2026-10-16 · accepted (Phase 3b)*
-Four dated confirmations (no billing on the Google project, model is free, free-tier data use accepted, free quotas entered) plus an explicit approval of the first real request are stored in the Durable Object, each expiring after 30 days. Withdrawing one switches AI off. Changing the model withdraws the quotas and the approval because quotas differ per model. The assistant that built this never turned any of it on and made no call to Google; the live key does not exist yet.
+## ADR-035: 수학·이론 강의는 그렇게 읽고, 가르치고, 출제함
+*채택*
+* **슬라이드에 있는 것:** 수식(OMML)은 LaTeX로 바꿔 KaTeX로 그리고, 입력한 수식을 알아보며, 표기 슬라이드나 "{1, 2, 3}" 같은 집합은 산수나 코드로 보지 않고, 의사코드는 고정폭 줄과 절차 낱말로 알아보며, 기계(오토마톤, 튜링 기계)는 어휘나 상태 표로 알아봅니다.
+* **계획이 따라갑니다:** 증명에는 증명 문제, 기계에는 실행 추적, 숫자를 계산하는 곳에만 계산 문제.
+* **수식이 든 인용:** 모델은 수식을 LaTeX로, 이스케이프해서, 아래 첨자를 다르게("M_1", "M1") 옮길 수 있으며 인용 확인은 이를 모두 받아들이고 바뀐 수식은 거절합니다.
+* **슬라이드가 수업에 던진 질문**은 답이 아닙니다.
 
+## ADR-036: 실제 강의로 시험하며 배운 것
+*채택*
+실제 강의로 앱을 시험했고 그 강의는 이 저장소에 없습니다. 드러난 결함은 같은 모양의 가상 슬라이드로 회귀 테스트를 붙여 고쳤습니다(수식 안의 공백, 각괄호, 줄 간격, 제목 슬라이드와 감사 줄을 내용으로 본 것, 집합 표기를 산수로 본 것, 아래 첨자 때문에 인용을 못 찾은 것 등). 테스트는 가상 자료(`tests/fixtures/`)만 쓰며 실제 과목의 내용은 저장하지 않습니다.
 
-## ADR-024 — Fixes from an independent adversarial review of Phase 3
-*2026-10-17 · accepted (Phase 3b)*
-A reviewer who had not written the code tried to bypass the owner login, spend more than the budget, abuse the endpoint and leak data. It found no way past the login and no way to exceed a budget, and 11 weaker points that were fixed and each got a test:
+## ADR-037: 공개 데모는 AI 코드가 없는 별도 정적 빌드로, GitHub Pages에서
+*2026-10-23 · 채택*
+저장소를 받아 `pnpm install`부터 해야 보이는 도구는 써 보기 어렵습니다. 데모는 가상 자료만으로 10초 안에 학습 기능을 써 보게 합니다([DEMO.md](DEMO.md)).
+* **실행 중 스위치가 아니라 빌드 모드.** `vite build --mode demo`가 하위 경로, `dist-demo/`, `src/app/ai.ts`를 `src/app/ai.demo.ts`로 바꾸기, 배너, `404.html`을 정합니다. 일반 빌드에는 아무것도 들어가지 않습니다(테스트가 둘 다 빌드해 확인). 그래서 "데모는 서버에 요청할 수 없다"는 변수가 아니라 파일에 관한 사실입니다.
+* **정책은 페이지 안에.** GitHub Pages는 헤더를 보낼 수 없으므로 데모의 Content-Security-Policy는 `config/headers.ts`에서 만든 `<meta http-equiv>`이며, 헤더로만 가능한 지시어는 빠집니다. 헤더 없이 띄운 데모로 "다른 사이트 요청 없음"을 확인합니다.
+* **예시 과목은 브라우저에서 테스트 생성기로 만듭니다.** 진짜 엔진이 읽고, 카드와 문제와 노트는 일반 묶음 가져오기를 거쳐 모든 인용이 확인됩니다. 방문자가 바로 써 보도록 미리 승인해 둡니다.
+* **손으로 게시.** `.github/workflows/demo.yml`은 `workflow_dispatch`로만, 기본 브랜치에서만 돌고, 모든 액션을 커밋으로 고정합니다.
+* **알려진 대가:** 같은 계정의 Pages 사이트는 출처를 공유하므로 데모의 IndexedDB가 그 출처의 다른 앱에 보입니다. 깊은 주소에서 새로 고치면 404 상태에 앱 본문이 옵니다.
 
-* **Login lock-out:** the old design refused even the right key while a lock or the global failure counter was active, so an attacker could lock the owner out, and the check and the count were separate steps (a parallel burst could slip past). Now the key is checked first, every wrong key is counted atomically in the Durable Object, the right key is never refused (and clears that address's failures), there is no global lock, IPv6 is counted per /64, old records are forgotten after a quiet day and the table is kept small.
-* **Spend ledger:** the day/month counters can no longer be moved backwards by a small clock step across midnight or a month end; a ledger row that disappears after it has existed is treated as an unknown budget, not as zero.
-* **Prompt injection:** the exam instructions for question generation are now escaped inside their own data block (they used to sit in the rules); a reminder repeats after the data in the tutor prompt; only notes the student wrote themselves are offered as context (imported packs and AI text are not); the BASIS/FOLLOWUPS lines are taken from the end of the reply, with a length cap and a linear-time pattern; marking-point ids are restricted to plain tokens.
-* **Requests:** the Origin must be exactly this site (not just any allowed host, no user info or path); session signatures must be exactly 32 bytes; provider calls never follow a redirect (a redirect would carry the key header elsewhere). **Correction found by the first live request:** this was first written as `redirect: 'error'`, which the Workers runtime does not implement ("must be follow or manual"), so the call threw before leaving the Worker; nothing was sent to Google or billed, and the app counted it as an unclear outcome. It is now `manual` (a redirect is returned, not followed, and counts as unclear), a unit test forbids the broken option, and an end-to-end test runs the **real** Gemini adapter inside workerd against a local stub of Google's endpoint, because the scripted fake never calls `fetch` and could not notice.
-* **Accounting:** token counts that Google's total reports but no field explains are billed as output; changing the model also withdraws "the model is free of charge".
-* **Backups** no longer carry the consent to send text to an AI service, so a restored or doctored backup cannot pre-approve anything.
-
-## ADR-025 — The whole site is private, not only the API
-*2026-10-17 · accepted (deployment)*
-The deployment is private first. The app's files hold no private data (the library lives in the owner's browser), but a site that anyone can open can also be probed, and nobody else should see or use it. With `PRIVATE_SITE` on (the default; only an explicit `off` turns it off) and `run_worker_first: true`, every request passes through the Worker: without a valid owner session cookie it answers only a small sign-in page (plain HTML, one form, no script, one hashed inline style); with one it serves the files. The cookie is checked for signature and expiry only (no storage call per file); the API still checks the session fully, including "sign out everywhere". Static files are therefore counted against the free Worker request quota; for one person that is far below 100 000 a day.
-* The form posts to `/api/auth/gate`, shares the login code (so the same atomic lock applies and the right key is never refused), and is protected by the same Origin/Fetch-Metadata checks. The sign-in page uses `Referrer-Policy: same-origin`: with `no-referrer` browsers send `Origin: null` on a form post (found by the browser test).
-* The first deployment uses a `*.workers.dev` address (the only way in without a domain); the gate makes that address show nothing but the sign-in page. `ALLOWED_HOSTS` is a Cloudflare secret so no hostname is committed to a public repository. A unit test fails if the committed configuration stops being private.
-* Alternatives rejected: Cloudflare Access (account card requirement not confirmed from Cloudflare's own documentation; see ADR-006) and leaving the files public.
-
-## ADR-026 — The words in a picture are typed by the student, never guessed
-*accepted*
-Some slides are only a picture (a diagram, a memory layout). The extractor can say "a picture is here", but a tutor cannot teach from it. Options considered: OCR in the browser (it garbled diagram text and would add several megabytes and false confidence), sending pictures to a vision model (breaks "only slide text leaves the device" and costs money), and typing the words by hand.
-* Each picture gets a "Words in this picture" box. What is typed is stored in the slide's own row, is marked as *typed by the student* in everything sent to an AI (so it can be cited as the slide but is known to possibly contain typing mistakes), carries over when the lecture is imported again, and is part of backups.
-* Typing settles the "this picture may contain text" warning for that slide. A picture is flagged only when it covers a meaningful part of the slide, so logos and icons raise no alarm, and file names such as `image3.png` are never shown as if they were descriptions.
-* The AI rules say: never describe or guess what an unreadable picture shows; say that it cannot be read and suggest typing its words.
-
-## ADR-027 — Teach in order, and send only what the question needs
-*accepted*
-A **guided lesson** cuts a lecture's own topics, in slide order, into parts of at most four slides (small neighbouring topics are packed together, a long topic is cut evenly). Picking a part chooses those slides and writes the question; the student sees the exact slide text before it is sent. A slide range limits what a generation sends. The whole deck is never sent by default.
-
-## ADR-028 — An answer that hit the length limit is never passed off as finished
-*accepted*
-A free-tier request is capped in output tokens, and a large generation can stop in the middle of its JSON.
-* **Say so, end to end:** the provider's "max tokens" finish reason becomes a `truncated` flag that travels provider → budget guard → Worker reply → screen. The cost accounting is unchanged.
-* **Ask for what fits:** the counts in a request are cut until the estimated size is at most 70 % of the cap, the Generate dialog shows the real numbers, and the prompt says "keep every field short; fewer items, never a longer one".
-* **Keep what is finished:** the import screen rescues every complete item before the cut and warns; nothing is invented, and every rescued item still goes through the quote check and approval.
-* A cut-off chat answer says so and offers "Ask it to continue"; a cut-off marking reply is never turned into marks.
-
-## ADR-029 — The tutor's answers are checked by the app, not trusted
-*accepted*
-Reading answers against the slides showed problems that a prompt alone does not prevent, so rules and device-side checks are combined:
-* **Citation labels mean something only inside one request.** Before an answer is stored the labels are replaced by the real slide ("[slide 11]"); a label that was never sent becomes "[source not found]".
-* **Outside material has one place:** a paragraph that begins "Beyond the slides:". This includes the model's own examples, analogies, numbers and "because…" reasons. If the slides do not contain the answer, it begins "Not covered on these slides:", and the app never labels such an answer as coming from the slides.
-* **Quoted wording is checked:** words in quotation marks are looked up in the slides that were sent; wording found nowhere lowers a "lecture" label to "derived".
-* Hexadecimal values and addresses are plain text, never LaTeX; the closing lines are described in words, and the app strips angle brackets and drops copied placeholders.
-* These are rules plus deterministic checks, not guarantees.
-
-## ADR-030 — AI marking is evaluated against an independent reading, and its limits are stated
-*accepted*
-AI marking was tested with made-up student answers (strong, partial, wrong, an identical repeat, and one that tells the marker to award full marks), with the expected marks written down before any request. The marker is only an assistant: marks are always labelled uncertain, a student's text that tries to give instructions is data, a cut-off reply is never turned into marks, and the student decides.
-
-## ADR-031 — Exam questions are planned on the device before the AI writes them
-*accepted*
-Asked for "a normal set", a model writes what is easiest: recall questions, none hard, a few slides covered. So the browser first makes a plan with no AI (`blueprint.ts`): for each question a kind, a difficulty, marks, the number of marking points, a topic and the slides it is based on.
-* **Kinds follow the material.** Calculations and problems only where a slide has an equation, proofs where there is a theorem or proof, algorithm and code questions where there are steps (or a machine to run), diagram questions where there is a picture or its typed words, attack-and-countermeasure questions where the lecture is about attacks.
-* **Difficulty means something:** about 30 % easy, 40 % medium, 30 % hard. Marks grow with difficulty, about one marking point per mark, and never more points than the chosen slides hold separate ideas.
-* **The professor's instructions steer it** ("mostly scenarios", "short, complete answers", "proofs where appropriate", "no multiple choice", "only …", "answers are 1–3 sentences"), and the full text still goes to the model with the rule that the professor's style wins. With no instructions the plan says it is a sensible mix, not a prediction of the real exam.
-* **Coverage and repeats:** topics with untouched slides come first, a kind is never planned twice on the same slides, and slides about the lecture itself (objectives, outline, credits, a title, a recap, a check-in) are never the basis of a question. A lecture made of proofs gets several proof questions.
-* **Several requests:** one answer holds a limited number of tokens, so a plan of eight questions is two or three requests, each shown to the student and approved. The server builds the prompt from the structured plan (strict schema, titles and earlier questions escaped), so the browser cannot supply instructions.
-
-## ADR-032 — Generated exam questions are held to the rules the model was given
-*accepted*
-The prompt says what each kind of question is, what difficulty and marks mean, that each marking point must be one idea that can be earned alone, that the model answer must earn full marks from the slides only, and that questions must not repeat (`QUESTION_RULES`). The import screen then checks the result with no AI (`pack-quality.ts`): marks and points, "any two of" points, overlapping points, a model answer that would not earn full marks, points that are not on the cited slides, copies, all-recall sets, and questions that ignore the plan. It is advice before approval; nothing is dropped. The wording comparison is conservative on purpose. It cannot judge whether a question is wise or an answer true.
-
-## ADR-033 — Teaching: say what the slides do not say, and take care with formulas, tables, algorithms, proofs, machines and diagrams
-*accepted*
-* **Gaps are found on the device** (`gaps.ts`), shown to the student before sending, and sent with the slides as a list of facts: a slide that is only a heading, a picture whose words are not available, a reference to something that is not on the slide ("see figure 3"), a formula whose symbols the slide does not define, a diagram whose arrangement was inferred, a question the slide asks and does not answer, and labels and arrows whose meaning sits in their layout. The tutor says each one once, where the slide comes up, and does not fill it with a guess.
-* **Content-aware teaching notes** are added to the prompt only for what is really on the slides: formulas (explain only with the symbols the slides define), tables (row by row, add nothing), algorithms and code (the slides' steps in order, no complexity or edge cases unless the slides give them), diagrams (labels only), derivations and proofs (the slide's steps, say which step is skipped instead of filling it in), machines (trace one step at a time, add no states or transitions), and questions on slides (a slide's question is not its answer).
-* **Lesson memory:** a later lesson part names the parts that were really taught, so it connects to them even when early answers no longer fit the chat the server sees.
-
-## ADR-034 — Every marking point must answer something the question asks
-*accepted*
-Questions can be well formed and still misaligned: a six-mark question that asks for five things, a marking scheme that rewards something nobody asked for, or a "scenario" whose story could be deleted without changing the answer.
-* **The model commits to what it asks (prompt rule H).** After the prompt it lists `asks`: the exact words of the prompt that ask for something and how many items each wants. Every marking point says which ask it answers. A mark can only be added by first asking for it in the prompt.
-* **The device checks it:** an ask whose words are not in the question, an ask with more or fewer points than it wants, a point that answers no ask, a number word that disagrees with the count, a scenario whose situation adds nothing the slides do not already say, and algorithm points that rest on one step of the slides.
-* **The AI reads the meaning (optional, one request, task `audit`).** For each marking point it says whether the question itself asks for it (a "yes" needs the exact words, which the app verifies). It sees only the questions, marking points and model answers. One click removes a padded point and its marks.
-* Limits: only a reader of the meaning can see a point that is asked for in words but answers something else, and that reader can be wrong, so it only advises.
-
-## ADR-035 — Mathematical and theory lectures are read, taught and examined as such
-*accepted*
-Formulas, proofs, pseudocode, tables, matrices and machines need their own handling.
-* **What is on a slide:** equations (OMML) are converted to LaTeX and drawn with KaTeX; typed formulas are recognised; a notation slide or a set such as "{1, 2, 3}" is not arithmetic or code; pseudocode is recognised from monospaced lines and procedure words, not from the word "algorithm"; a machine (an automaton, a Turing machine) is recognised from its vocabulary or a table of states.
-* **The plan follows:** a proof question on a proof, the run of a machine on a machine, a calculation only where numbers are computed, no story where there is none unless the professor asks for scenarios.
-* **Quotes with formulas:** a model may copy a formula as LaTeX, with escapes, or with a subscript written differently from the slide ("M_1", "M1"); quote verification accepts all of these and still rejects a changed formula.
-* **Questions a slide puts to the class** (a check-in, "why is this a diagonalization?") are not answers: no question is based on a check-in slide, and the tutor and the question writer are told not to present their own answer as the slide's.
-
-## ADR-036 — What testing on real lectures taught
-*accepted*
-Real lectures were used to test the app and are not part of this repository. The defects they showed, each fixed with a regression test on an invented slide of the same shape:
-* Equations: a space stored inside an equation was dropped, and the three Unicode angle brackets were not all read.
-* Drawing: blank lines, "space before/after" and line spacing were ignored, so text ran over the labels of a figure; a list marker wrapped onto its own line; a title with a subscript was listed with raw braces.
-* Judging a slide: a title slide and a credits line were examined as content; set notation and "a 1-1 correspondence" were arithmetic; monospaced digits that label a table were code; a small photograph was a diagram.
-* Judging a question: a quote was "not found" because of a subscript; a short verbatim quote was called unconfirmed by the AI check; a "scenario" that restated the slide and algorithm points that paid one step twice were not found.
-The tests use invented decks (`tests/fixtures/`) and invented text; nothing from a real course is stored.
-
-## ADR-037 — The public demo is a separate static build with no AI code, served by GitHub Pages
-*2026-10-23 · accepted*
-A tool that asks people to clone a repository and run `pnpm install` before they see anything is hard to adopt. The demo lets a visitor try the study features in ten seconds, in a browser, with invented content only (docs/DEMO.md).
-* **A build mode, not a flag at run time.** `vite build --mode demo` (one config, `vite.config.ts`) sets the sub-path, writes to `dist-demo/`, swaps `src/app/ai.ts` for `src/app/ai.demo.ts`, mounts the banner and writes `404.html`. The regular build compiles none of it (a test builds both and checks). The AI client is swapped out of the bundle instead of being switched off at run time, so "the demo cannot call a Worker" is a fact about the files, not about a variable: the demo bundle has no `/api/` address and no `fetch` in the AI path, and a test reads every shipped file. The real Worker is never involved, so there is no key, no budget and no owner login to protect.
-* **The policy travels in the page.** GitHub Pages sends no custom headers, so the demo's Content-Security-Policy is a `<meta http-equiv>` built from `config/headers.ts` (the same list, minus `frame-ancestors`, which a `<meta>` cannot carry). It is inserted straight after the charset, and the build fails if that marker is missing. The "no third-party requests" guarantee holds and is tested with the demo served with *no* headers, so the page's own policy is what is proven. **The differences, honestly:** the demo cannot set `frame-ancestors`/`X-Frame-Options` (another site can put it in a frame), `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Permissions-Policy` or `nosniff`; whatever GitHub sends for its own domain (for example HSTS) applies instead. A `_headers` file is not written for the demo: GitHub would ignore it, and a file that looks like protection but is not would mislead. The demo holds no account, key or private data; the real, private deployment (ADR-025) keeps all of its headers and is unchanged.
-* **The sample course is made in the browser, from the test builder.** The two invented lectures are built when the button is pressed with `tests/fixtures/pptx-builder.ts` (the only place production code reaches into `tests/`, and only in the demo's lazy chunk), read by the real engine in the real worker, and the cards, questions and notes enter through the normal study-pack import, so every quote is checked against its slide. Alternatives: shipping a `.pptx` and a JSON file as assets (one more fetch and one more failure mode, and nothing is gained for a two-slide-deck demo) and a hand-written database seed (it would skip the very code the demo is meant to show).
-* **Approved up front.** The sample's cards and questions are stored as approved, unlike an imported pack, which waits for the student (ADR-010). A visitor should reach a flashcard in one click; the material is the project's own and every quote is verified by a test.
-* **Published by hand.** `.github/workflows/demo.yml` runs only on `workflow_dispatch`, from the default branch, with read access in the build and Pages write plus `id-token` only in the deploy job, and every action pinned to a verified commit. It never enables Pages: the owner switches **Source: GitHub Actions** on once (docs/DEMO.md), so a merge cannot publish anything by itself.
-* **Known costs.** All Pages sites of one account share an origin, so the demo's IndexedDB is visible to a second app hosted there (docs/DEMO.md); a reload on a deep link is answered with a 404 status whose body is the app; the demo's guarantees are weaker than the private deployment's in the ways listed above, and none of them protects anything the demo holds.
-* **Rejected:** a public copy of the real Worker with AI on (spends free-tier quota for strangers and needs sign-in, which is what ADR-025 exists to avoid); Cloudflare Pages (needs an account step the owner has not taken); a hosted demo with a canned "AI" (it would show behaviour the app does not have).
+## ADR-038: AI는 내 ChatGPT 플랜 하나, StudyAI 키나 로그인 없이 루프백 경계로 보호
+*2026-11-12 · 채택*
+사용자는 내 컴퓨터에서 StudyAI를 열고 이미 연결한 ChatGPT 플랜으로 바로 묻기를 원했습니다. 소유자 키와 그 세션은 같은 사람에게 두 번째 로그인을 요구했고, 다른 엔진과 그 비용 장부·확인 절차는 쓰이지 않는 무게였습니다.
+* **엔진 하나.** 튜터, 생성, 채점, 점검이 모두 ChatGPT 플랜으로 답합니다. 엔진 선택, 비용 장부, 확인 절차, 사이트 전체 잠금, 로그인 제한 코드를 지웠습니다.
+* **경계는 요청 자체.** 로컬 API는 `Host`와 URL 호스트가 정확히 `127.0.0.1:<포트>`이고, `Sec-Fetch-Site`가 있으면 `same-origin`, `Origin`이 있으면 정확히 그 주소이며, POST에는 `Origin`과 JSON 본문이 있어야 받습니다. DNS 리바인딩, 다른 사이트, 같은 컴퓨터의 다른 포트를 막습니다.
+* **원격 사본에는 AI가 없습니다.** `STUDYAI_LOOPBACK`이 없으면 상태 확인 말고 모든 API를 Durable Object에 닿기 전에 거절합니다. 학습 앱은 그대로 동작합니다.
+* **기존 연결을 지킵니다.** Durable Object 이름(`owner`), 클래스, 바인딩, 마이그레이션 태그, `chatgpt:*` 행 이름, 봉인 형식, 봉인 키를 그대로 둡니다. 실행기는 이전 `secrets.json`에서 봉인 키만 읽고 파일을 고치지 않습니다. 이전 버전이 남긴 다른 행과 파일은 읽지 않고 지우지도 않습니다.
+* **비교한 대안: 자동 쿠키 발급.** 첫 페이지 열 때 서버가 세션 쿠키를 주는 방식은 그 페이지를 열 수 있는 누구에게나 쿠키를 주므로 루프백 경계가 막지 못하는 것을 더 막지 못하고, 같은 컴퓨터의 다른 사용자도 비밀 값 없이는 막지 못합니다. 상태와 만료와 401 경로만 늘어나서 택하지 않았습니다.
+* **대가:** 같은 컴퓨터의 다른 운영체제 사용자나 프로그램은 이 포트로 연결된 계정을 쓸 수 있습니다([SECURITY.md](../SECURITY.md)). ChatGPT는 끝까지 오지 않은 답을 잘린 답으로 주지 않고 실패로 돌려주므로, 앱은 잘린 AI 답을 받지 않습니다.

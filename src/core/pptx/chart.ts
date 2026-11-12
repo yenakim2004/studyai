@@ -48,7 +48,7 @@ export function parseChartPart(root: XNode): ChartData | null {
       const isXY = m[1] === 'scatter' || m[1] === 'bubble';
       const cats = readCache(child(ser, isXY ? 'c:xVal' : 'c:cat'));
       const vals = readCache(child(ser, 'c:val') ?? child(ser, 'c:yVal'));
-      series.push({ name: seriesName(ser) || `Series ${series.length + 1}`, values: vals });
+      series.push({ name: seriesName(ser) || `계열 ${series.length + 1}`, values: vals });
       if (isXY) xValues.push(cats);
       else if (categories.length === 0 && cats.length > 0) categories = cats.map(String);
     }

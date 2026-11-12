@@ -444,7 +444,7 @@ function partsOf(slides: readonly SlideData[], topics: BlueprintInput['topics'],
     if (inTopic.length > 0) raw.push({ title: t.title, slides: inTopic });
   }
   const rest = slides.filter((s) => !seen.has(s.index));
-  const restTitle = raw.length === 0 ? 'The lecture' : 'Other slides';
+  const restTitle = raw.length === 0 ? '강의 전체' : '기타 슬라이드';
   if (rest.length > 0) raw.push({ title: restTitle, slides: rest });
   const titleOf = new Map<number, string>();
   for (const p of raw) for (const s of p.slides) titleOf.set(s.index, p.title);
@@ -800,5 +800,5 @@ export function splitIntoRequests(slots: readonly Slot[], outputTokens: number):
 
 /** One line per slot, as it appears in the prompt and on the screen. */
 export function describeSlot(s: Slot): string {
-  return `${QUESTION_TYPE_LABEL[s.type]} · ${['', 'easy', 'medium', 'hard'][s.difficulty]} · ${s.marks} mark${s.marks === 1 ? '' : 's'} · ${s.topic} · slide${s.slides.length === 1 ? '' : 's'} ${s.slides.join(', ')}`;
+  return `${QUESTION_TYPE_LABEL[s.type]} · 난이도 ${['', '쉬움', '보통', '어려움'][s.difficulty]} · ${s.marks}점 · ${s.topic} · 슬라이드 ${s.slides.join(', ')}`;
 }

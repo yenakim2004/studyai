@@ -32,9 +32,9 @@ export function daysUntil(isoDate: string | undefined): number | undefined {
 export function examLabel(isoDate: string | undefined): string | undefined {
   const d = daysUntil(isoDate);
   if (d === undefined) return undefined;
-  if (d < 0) return `Exam was ${-d} day${d === -1 ? '' : 's'} ago`;
-  if (d === 0) return 'Exam is today';
-  return `Exam in ${d} day${d === 1 ? '' : 's'}`;
+  if (d < 0) return `시험 ${-d}일 지남`;
+  if (d === 0) return '오늘 시험';
+  return `시험까지 ${d}일`;
 }
 
 export function CourseLayout() {
@@ -52,7 +52,7 @@ export function CourseLayout() {
   /** The questions that were asked for, so the import check can compare what came back with the plan. */
   const [generatedPlan, setGeneratedPlan] = useState<PlannedSlot[] | undefined>();
 
-  if (course === null) return <NotFound what="course" />;
+  if (course === null) return <NotFound what="과목이" />;
   if (course === undefined || lectures === undefined) {
     return (
       <div className="p-6">
@@ -71,7 +71,7 @@ export function CourseLayout() {
     `-mb-px inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm font-medium ${isActive ? 'border-accent text-ink' : 'border-transparent text-ink-3 hover:text-ink'}`;
   const badge = (n: number, label: string, tone: 'accent' | 'warn' = 'accent') =>
     n > 0 ? (
-      <span className={`rounded-full px-1.5 py-0.5 text-xs ${tone === 'warn' ? 'bg-warn-soft text-warn' : 'bg-accent-soft text-ink'}`} aria-label={`${n} ${label}`}>
+      <span className={`rounded-full px-1.5 py-0.5 text-xs ${tone === 'warn' ? 'bg-warn-soft text-warn' : 'bg-accent-soft text-ink'}`} aria-label={`${label} ${n}개`}>
         {n}
       </span>
     ) : null;
@@ -84,61 +84,59 @@ export function CourseLayout() {
           <dl className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-2">
             {course.code && (
               <div>
-                <dt className="sr-only">Course code</dt>
+                <dt className="sr-only">과목 코드</dt>
                 <dd className="font-mono text-[13px]">{course.code}</dd>
               </div>
             )}
             <div>
-              <dt className="sr-only">Lectures</dt>
-              <dd>
-                {lectures.length} lecture{lectures.length === 1 ? '' : 's'}
-              </dd>
+              <dt className="sr-only">강의</dt>
+              <dd>강의 {lectures.length}개</dd>
             </div>
             <div>
-              <dt className="sr-only">Slides</dt>
-              <dd>{totalSlides} slides</dd>
+              <dt className="sr-only">슬라이드</dt>
+              <dd>슬라이드 {totalSlides}장</dd>
             </div>
             {exam && (
               <div>
-                <dt className="sr-only">Exam</dt>
+                <dt className="sr-only">시험</dt>
                 <dd className="font-medium text-ink">{exam}</dd>
               </div>
             )}
-            {course.archived && <div className="font-medium text-warn">Archived</div>}
+            {course.archived && <div className="font-medium text-warn">보관됨</div>}
           </dl>
         </div>
         <div className="flex items-center gap-2">
           <Menu
-            label="Study packs from your own AI"
-            text="Study packs"
+            label="학습 팩 만들기와 가져오기"
+            text="학습 팩"
             icon={<Sparkles className="size-4" aria-hidden />}
             items={[
-              { label: 'Generate with the AI tutor (Gemini)…', icon: <Sparkles className="size-4" aria-hidden />, onSelect: () => setGenerate(true), disabled: lectures.length === 0 },
-              { label: 'Create a pack with your own AI…', icon: <Sparkles className="size-4" aria-hidden />, onSelect: () => setAiExport(true), disabled: lectures.length === 0 },
-              { label: 'Import a study pack…', icon: <Upload className="size-4" aria-hidden />, onSelect: () => setPackImport(true), disabled: lectures.length === 0 },
+              { label: 'AI 학습 자료 생성…', icon: <Sparkles className="size-4" aria-hidden />, onSelect: () => setGenerate(true), disabled: lectures.length === 0 },
+              { label: '다른 AI로 팩 만들기…', icon: <Sparkles className="size-4" aria-hidden />, onSelect: () => setAiExport(true), disabled: lectures.length === 0 },
+              { label: '학습 팩 가져오기…', icon: <Upload className="size-4" aria-hidden />, onSelect: () => setPackImport(true), disabled: lectures.length === 0 },
             ]}
           />
           <Button variant="secondary" onClick={() => setDetails(true)}>
-            <Settings2 className="size-4" aria-hidden /> Course details
+            <Settings2 className="size-4" aria-hidden /> 과목 정보
           </Button>
         </div>
       </header>
 
-      <nav aria-label="Course sections" className="mt-5 flex overflow-x-auto border-b border-rule print:hidden">
+      <nav aria-label="과목 메뉴" className="mt-5 flex overflow-x-auto border-b border-rule print:hidden">
         <NavLink to={`/course/${course.id}`} end className={tab}>
-          Lectures
+          강의
         </NavLink>
         <NavLink to={`/course/${course.id}/cards`} className={tab}>
-          Flashcards {badge(due, 'due now')} {badge(pending, 'to review', 'warn')}
+          플래시카드 {badge(due, '지금 복습할 카드')} {badge(pending, '검토할 카드', 'warn')}
         </NavLink>
         <NavLink to={`/course/${course.id}/notes`} className={tab}>
-          Notes
+          노트
         </NavLink>
         <NavLink to={`/course/${course.id}/practice`} className={tab}>
-          Practice and exams
+          연습과 시험
         </NavLink>
         <NavLink to={`/course/${course.id}/tutor`} className={tab}>
-          AI tutor
+          AI 튜터
         </NavLink>
       </nav>
 
@@ -214,7 +212,7 @@ function CourseDetailsDialog({ open, course, onClose, onDeleted }: { open: boole
       goal: goal.trim() || undefined,
       examStyle: style.trim() || undefined,
     });
-    toast.show('Course details saved.', 'ok');
+    toast.show('과목 정보를 저장했습니다.', 'ok');
     onClose();
   };
 
@@ -223,70 +221,70 @@ function CourseDetailsDialog({ open, course, onClose, onDeleted }: { open: boole
       open={open}
       onClose={onClose}
       wide
-      title="Course details"
+      title="과목 정보"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button variant="primary" disabled={!name.trim()} onClick={() => void save()}>
-            Save details
+            저장
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Course name" htmlFor="cd-name">
+          <Field label="과목 이름" htmlFor="cd-name">
             <TextInput id="cd-name" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label="Course code" htmlFor="cd-code">
+          <Field label="과목 코드" htmlFor="cd-code">
             <TextInput id="cd-code" value={code} onChange={(e) => setCode(e.target.value)} />
           </Field>
         </div>
-        <Field label="Exam date" htmlFor="cd-exam" hint="Used for countdowns and study planning.">
+        <Field label="시험 날짜" htmlFor="cd-exam" hint="남은 날짜 표시와 학습 계획에 씁니다.">
           <TextInput id="cd-exam" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} className="sm:max-w-56" />
         </Field>
-        <Field label="Your goal" htmlFor="cd-goal" hint="For example: “Pass with at least 70%” or “Understand reductions properly”.">
+        <Field label="내 목표" htmlFor="cd-goal" hint="예: “70점 이상으로 통과”, “환원을 제대로 이해하기”">
           <TextInput id="cd-goal" value={goal} onChange={(e) => setGoal(e.target.value)} />
         </Field>
         <Field
-          label="Professor’s exam instructions"
+          label="교수의 출제 안내"
           htmlFor="cd-style"
-          hint="Used later when practice questions and answers are generated for this course. Example: “Most questions are scenarios and answers are 1–3 sentences. Answers must come strictly from the slides.”"
+          hint="이 과목의 연습 문제와 답을 만들 때 씁니다. 예: “대부분 상황형 문제이고 답은 1~3문장입니다. 답은 반드시 슬라이드 내용에서만 나와야 합니다.”"
         >
           <TextArea id="cd-style" value={style} onChange={(e) => setStyle(e.target.value)} rows={4} />
         </Field>
 
         <div className="rounded-[var(--radius-panel)] border border-rule p-4">
-          <h3 className="text-sm font-semibold">Archive or delete</h3>
+          <h3 className="text-sm font-semibold">보관 또는 삭제</h3>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               onClick={async () => {
                 await updateCourse(db, course.id, { archived: !course.archived });
-                toast.show(course.archived ? 'Course restored.' : 'Course archived.', 'ok');
+                toast.show(course.archived ? '과목을 되돌렸습니다.' : '과목을 보관했습니다.', 'ok');
                 onClose();
               }}
             >
-              {course.archived ? 'Restore course' : 'Archive course'}
+              {course.archived ? '과목 되돌리기' : '과목 보관'}
             </Button>
           </div>
           <p className="mt-3 text-[13px] text-ink-2">
-            To delete this course and all of its lectures from this device, type its name (<span className="font-medium">{course.name}</span>) below.
+            이 과목과 모든 강의를 이 기기에서 삭제하려면 아래에 과목 이름(<span className="font-medium">{course.name}</span>)을 입력하세요.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <TextInput aria-label="Type the course name to confirm deletion" value={confirmDelete} onChange={(e) => setConfirmDelete(e.target.value)} className="sm:max-w-64" />
+            <TextInput aria-label="삭제를 확인하려면 과목 이름 입력" value={confirmDelete} onChange={(e) => setConfirmDelete(e.target.value)} className="sm:max-w-64" />
             <Button
               variant="danger"
               disabled={confirmDelete.trim() !== course.name}
               onClick={async () => {
                 await deleteCourse(db, course.id);
-                toast.show('Course deleted.', 'ok');
+                toast.show('과목을 삭제했습니다.', 'ok');
                 onDeleted();
               }}
             >
-              <Trash2 className="size-4" aria-hidden /> Delete course
+              <Trash2 className="size-4" aria-hidden /> 과목 삭제
             </Button>
           </div>
         </div>

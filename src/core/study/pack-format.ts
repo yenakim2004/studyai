@@ -8,32 +8,32 @@ import { BASES, CARD_TYPES, NOTE_KINDS, QUESTION_TYPES } from './types';
 export const PACK_FORMAT = 'studyai-pack';
 export const PACK_VERSION = 1;
 
-/** The pack skeleton shown to the AI: precise, short, and including the provenance rules. */
+/** The pack skeleton shown to the AI: precise, short, and including the provenance rules. Keys and enum values stay as the importer reads them. */
 const SCHEMA_EXAMPLE = {
   format: PACK_FORMAT,
   version: PACK_VERSION,
-  generator: 'name of the AI and date',
-  lectures: [{ ref: 'L1', title: 'exact lecture title from the export', fileHash: 'hash from the export comment', slideCount: 40 }],
+  generator: 'AI 이름과 날짜',
+  lectures: [{ ref: 'L1', title: '내보내기에 적힌 강의 제목 그대로', fileHash: '내보내기 주석의 해시', slideCount: 40 }],
   // Questions come first, then cards, then notes: if an answer is ever cut off, what is lost is the least valuable part.
   questions: [
     {
       type: 'scenario',
-      prompt: 'REQUIRED, the question exactly as the student reads it: a short situation, then the question: state three things that ...',
-      asks: [{ quote: 'words copied from the prompt that ask for something, such as: state three things', count: 3 }],
+      prompt: '필수. 학생이 읽는 문제 전문: 짧은 상황 설명 뒤에 질문. 예: ... 세 가지를 쓰시오',
+      asks: [{ quote: '무언가를 요구하는 prompt 속 문구를 그대로 복사, 예: 세 가지를 쓰시오', count: 3 }],
       marks: 3,
       difficulty: 3,
-      topic: 'topic title, copied exactly',
+      topic: '주어진 주제 제목을 그대로',
       lectures: ['L1'],
-      modelAnswer: 'what a student who earns full marks writes: all three points, once each, from the slides only',
-      rubric: [{ text: 'first separate idea', marks: 1, ask: 1, keywords: ['optional', 'words'] }, { text: 'second separate idea', marks: 1, ask: 1 }, { text: 'third separate idea', marks: 1, ask: 1 }],
-      expectedWords: [36, 60],
-      hint: 'optional nudge that does not give the answer away',
+      modelAnswer: '만점을 받는 학생이 쓰는 답: 세 가지 내용을 한 번씩, 슬라이드 내용만으로',
+      rubric: [{ text: '첫째 독립된 내용', marks: 1, ask: 1, keywords: ['선택', '단어'] }, { text: '둘째 독립된 내용', marks: 1, ask: 1 }, { text: '셋째 독립된 내용', marks: 1, ask: 1 }],
+      expectedWords: [24, 42],
+      hint: '답을 알려 주지 않는 선택적 힌트',
       basis: 'lecture',
-      sources: [{ lecture: 'L1', slide: 12, quote: 'exact words copied from slide 12' }],
+      sources: [{ lecture: 'L1', slide: 12, quote: '12번 슬라이드의 문장을 원문 그대로 복사' }],
     },
   ],
-  cards: [{ type: 'definition', front: 'question side', back: 'answer side', lecture: 'L1', basis: 'lecture', tags: ['topic'], sources: [{ lecture: 'L1', slide: 12, quote: 'exact words copied from slide 12' }] }],
-  notes: [{ title: 'Topic summary: …', kind: 'summary', lecture: 'L1', blocks: [{ text: 'markdown with $latex$', basis: 'lecture', sources: [{ lecture: 'L1', slide: 12, quote: 'exact words copied from slide 12' }] }] }],
+  cards: [{ type: 'definition', front: '질문 면', back: '답 면', lecture: 'L1', basis: 'lecture', tags: ['주제'], sources: [{ lecture: 'L1', slide: 12, quote: '12번 슬라이드의 문장을 원문 그대로 복사' }] }],
+  notes: [{ title: '주제 요약: …', kind: 'summary', lecture: 'L1', blocks: [{ text: '$latex$를 쓸 수 있는 마크다운', basis: 'lecture', sources: [{ lecture: 'L1', slide: 12, quote: '12번 슬라이드의 문장을 원문 그대로 복사' }] }] }],
 };
 
 export interface PromptOptions {
@@ -56,7 +56,7 @@ export interface PromptOptions {
 export type PackKind = 'notes' | 'cards' | 'questions';
 
 const BASE_COUNTS = { few: [5, 10, 6], normal: [10, 25, 12], many: [20, 50, 25] } as const;
-/** Tokens of JSON one item takes with its sources and quotes (measured on real Gemini answers, rounded up; questions are estimated). */
+/** Tokens of JSON one item takes with its sources and quotes (measured on real English answers, rounded up; questions are estimated). */
 const ITEM_TOKENS: Record<PackKind, number> = { notes: 220, cards: 130, questions: 330 };
 const OVERHEAD_TOKENS = 150;
 /** Leave a third of the cap unused: answers vary in length and a cut-off answer is worse than a short one. */
@@ -95,80 +95,83 @@ export function packCounts(o: Pick<PromptOptions, 'wants' | 'amount' | 'outputTo
 }
 
 /** What makes an exam question good, kind by kind. The checks in pack-quality.ts hold the answer to the same rules. */
-export const QUESTION_RULES = `QUESTIONS: what makes a good exam question from these slides
-A. Kind. Write each question as the "type" it has and make it really that kind:
-   - define: a term from the slides, asked together with what it is for or how it behaves.
-   - short: one focused question answered in a few sentences (why, how, what happens when).
-   - compare: two or more things named on the slides, compared on aspects that the question names.
-   - scenario: a short invented situation (2 to 4 sentences, concrete, new to the student) in which the student must apply ideas from the slides: ask them to decide, advise, predict, diagnose or justify IN THIS situation, so that the situation's details change the answer. The situation may be invented; every marking point must still be on the slides. If the question only asks to state facts the slides give, the story is decoration: write a short question instead. A situation must bring something the slides do not say (a particular string, language, machine, number, claim or person) for the slides' ideas to be applied to; "you are building the machine from the slides, describe it" is the slide with a sentence in front. On formal or mathematical material the situation can be a claim or a short argument to judge (a student's attempted step, a stated result, a machine described in two lines): the student says whether it holds and why, using only results the slides state.
-   - case: a longer situation with two or three parts, (a), (b), (c).
-   - attack: a threat and what weakens or stops it, only as the slides present them.
-   - problem, calculation: a problem that the slides' own method solves. Give every number in the question; the model answer shows each step.
-   - proof: a short argument or derivation that follows a method shown on the slides, one marking point per step. Use only the steps the slides show: never add a step, a lemma or a reason the slides leave out, and where a slide skips a step do not fill it in.
-   - algorithm, programming: trace or write steps like the slides' own, one marking point per step. Never split one step into two points and never add a point for a set-up sentence to reach the number of marks: if the slides show fewer steps than marks, ask for fewer marks. Ask for "the steps" (or "the transitions"), not "steps or outcomes". For a machine or automaton on the slides: ask for its run on a given input (or for a machine that does a stated job), one marking point per transition or decision.
-   - diagram: a figure whose words are on the slides: what it shows and why it matters.
-   - mcq: one correct option and plausible wrong ones that reflect real misconceptions (always write "options"); truefalse: a statement that is clearly true or false on the slides (always write "answer": true or false).
-   - long: a structured answer that links several ideas.
-B. Difficulty. 1 = state or recognise one idea from one slide. 2 = explain, compare or apply ideas from one to three slides. 3 = a situation or problem that needs several slides or several steps, which a student who only memorised definitions cannot answer.
-C. Marks. About one separate idea per mark: a 1-mark question asks for one fact, a 6-mark question for six distinct points. The wording says how much is wanted ("State two...", "Give three reasons...").
-D. Marking points. Each one is ONE idea a student can earn on its own: a student who writes only that idea gets that mark and no other. No point repeats or contains another. Never write "any two of", "all of", "at least" or "A or B" as a point: list the ideas separately and ask for a fixed number. The points add up to the question's marks, and each one has a source quote.
-E. Model answer. What a student who earns FULL marks writes: every marking point once, in plain language, in about 12 to 20 words per mark, using only what the slides say (for a scenario: the slides' ideas applied to the situation). Nothing in it may go beyond the slides. Set "expectedWords" to [12 x marks, 20 x marks], so a 3-mark question has [36, 60].
-F. Variety. Each question tests a different idea or different slides. Do not repeat or reword any question listed in <already_asked>, if there is one. Copy "topic" exactly as given.
-G. Prompt. Every question has a "prompt": the full text of the question as the student reads it, written before the answer and the marking points. A question without a "prompt" is thrown away, however good the rest is. Keep this even when every other field is short.
-H. Asks. After the prompt, list in "asks" every separate thing it asks the student for: {"quote": the exact words of your prompt that ask for it, "count": how many separate items or ideas it wants}. Then every marking point says which ask it answers: "ask": 1 for the first ask. An ask with count 3 has exactly three marking points, a number in the quote ("three reasons") equals its count, and the counts add up to the marks. Never add a marking point or a mark for something the prompt does not ask for: to reward an idea, first ask for it in the prompt. Everything the prompt asks for has marking points.
-I. Questions printed on slides. A question on a slide (a check-in, a poll, "Why is this ...?") is something the lecture put to the room, not something it answered. Do not use your own answer to it as a marking point or in the model answer as if the slide gave it. Base the marking points on what the slides state; if they do not answer it, write a different question that they do answer.`;
+export const QUESTION_RULES = `문제 작성: 이 슬라이드로 좋은 시험 문제를 만드는 방법
+A. 유형. 각 문제는 지정된 "type"으로 쓰고, 실제로 그 유형다운 문제여야 합니다.
+   - define: 슬라이드에 나온 용어를, 그것이 무엇을 위한 것인지나 어떻게 동작하는지와 함께 묻습니다.
+   - short: 몇 문장으로 답하는 하나의 초점 있는 질문(왜, 어떻게, 어떤 경우에 무엇이 일어나는가).
+   - compare: 슬라이드에 나온 둘 이상의 대상을, 문제에서 밝힌 측면으로 비교합니다.
+   - scenario: 짧은 가상 상황(2~4문장, 구체적이고 학생에게 새로운 상황)에서 슬라이드의 개념을 적용하게 합니다. 이 상황에서 판단, 조언, 예측, 진단, 정당화하게 하여 상황의 세부 내용이 답을 바꾸도록 하세요. 상황은 지어내도 되지만 모든 채점 기준은 슬라이드에 있어야 합니다. 문제가 슬라이드의 사실을 쓰라고만 한다면 이야기는 장식일 뿐이니 short 문제로 쓰세요. 상황에는 슬라이드에 없는 무언가(특정 문자열, 언어, 기계, 수치, 주장, 인물)가 있어야 슬라이드의 개념을 적용할 수 있습니다. "슬라이드의 기계를 만들고 있다. 그것을 설명하시오"는 슬라이드 앞에 문장 하나를 붙인 것에 불과합니다. 형식적이거나 수학적인 내용에서는 판단할 주장이나 짧은 논증(학생이 시도한 한 단계, 제시된 결과, 두 줄로 설명한 기계)이 상황이 될 수 있습니다. 학생은 슬라이드에 나온 결과만으로 그것이 성립하는지와 이유를 답합니다.
+   - case: 두세 부분 (a), (b), (c)로 된 더 긴 상황.
+   - attack: 위협과 그것을 약화하거나 막는 방법을, 슬라이드가 제시한 대로만.
+   - problem, calculation: 슬라이드의 방법으로 풀 수 있는 문제. 필요한 수치는 모두 문제에 주고, 모범 답안은 각 단계를 보여 줍니다.
+   - proof: 슬라이드에 나온 방법을 따르는 짧은 논증이나 유도. 단계마다 채점 기준 하나. 슬라이드에 나온 단계만 쓰세요. 슬라이드가 빠뜨린 단계, 보조정리, 이유를 추가하지 말고, 슬라이드가 건너뛴 단계를 채우지 마세요.
+   - algorithm, programming: 슬라이드와 같은 방식으로 단계를 추적하거나 작성. 단계마다 채점 기준 하나. 한 단계를 두 기준으로 나누거나, 배점을 채우려고 준비 문장에 기준을 추가하지 마세요. 슬라이드의 단계가 배점보다 적으면 배점을 줄이세요. "단계 또는 결과"가 아니라 "단계"(또는 "전이")를 물으세요. 슬라이드에 나온 기계나 오토마타는 주어진 입력에 대한 실행(또는 정해진 일을 하는 기계)을 묻고, 전이나 결정마다 채점 기준 하나를 둡니다.
+   - diagram: 글자가 슬라이드에 있는 그림이 무엇을 보여 주고 왜 중요한지.
+   - mcq: 정답 하나와 실제 오개념을 반영한 그럴듯한 오답(항상 "options"를 쓰세요). truefalse: 슬라이드 기준으로 분명히 참이거나 거짓인 진술(항상 "answer": true 또는 false를 쓰세요).
+   - long: 여러 개념을 연결하는 구조적인 답.
+B. 난이도. 1 = 슬라이드 하나의 개념 하나를 말하거나 알아보기. 2 = 슬라이드 1~3장의 개념을 설명, 비교, 적용하기. 3 = 여러 슬라이드나 여러 단계가 필요해서 정의만 외운 학생은 답할 수 없는 상황이나 문제.
+C. 배점. 1점에 독립된 내용 하나 정도: 1점 문제는 사실 하나, 6점 문제는 서로 다른 여섯 가지를 요구합니다. 문제 문장이 요구하는 양을 밝힙니다("두 가지를 쓰시오", "이유 세 가지를 제시하시오").
+D. 채점 기준. 각 기준은 학생이 따로 받을 수 있는 내용 하나입니다. 그 내용만 쓴 학생은 그 점수만 받습니다. 기준끼리 겹치거나 포함하면 안 됩니다. "다음 중 두 가지", "모두", "적어도", "A 또는 B"를 기준으로 쓰지 말고, 내용을 따로 나열한 뒤 정해진 개수를 요구하세요. 기준의 합은 문제 배점과 같고, 각 기준에는 출처 인용이 있어야 합니다.
+E. 모범 답안. 만점을 받는 학생이 쓰는 답입니다. 모든 채점 기준을 한 번씩, 쉬운 말로, 1점당 약 8~14단어(어절)로, 슬라이드가 말하는 내용만으로 씁니다(scenario는 슬라이드의 개념을 상황에 적용). 슬라이드를 벗어나는 내용은 넣지 마세요. "expectedWords"는 [8 x 배점, 14 x 배점]으로 정하세요. 3점 문제는 [24, 42]입니다.
+F. 다양성. 각 문제는 서로 다른 개념이나 다른 슬라이드를 다룹니다. <already_asked>가 있으면 그 목록의 문제를 반복하거나 바꿔 쓰지 마세요. "topic"은 주어진 그대로 복사하세요.
+G. 문제 문장. 모든 문제에는 "prompt"가 있어야 합니다. 학생이 읽는 문제 전문이며, 답과 채점 기준보다 먼저 씁니다. "prompt"가 없는 문제는 나머지가 아무리 좋아도 버려집니다. 다른 항목을 모두 짧게 쓰더라도 이것은 지키세요.
+H. 요구 사항. prompt 다음에 학생에게 요구하는 것을 하나하나 "asks"에 나열합니다: {"quote": 그것을 요구하는 prompt 속 문구 그대로, "count": 원하는 항목이나 내용의 개수}. 그리고 각 채점 기준에 어느 요구 사항에 답하는지 적습니다: 첫째 요구 사항이면 "ask": 1. count가 3인 요구 사항에는 채점 기준이 정확히 세 개 있고, quote 속 숫자("이유 세 가지")는 count와 같으며, count의 합은 배점과 같습니다. prompt가 요구하지 않은 것에 기준이나 점수를 더하지 마세요. 어떤 내용에 점수를 주려면 먼저 prompt에서 그것을 요구하세요. prompt가 요구하는 모든 것에는 채점 기준이 있어야 합니다.
+I. 슬라이드에 적힌 질문. 슬라이드의 질문(확인 문제, 투표, "왜 이것이 ...인가?")은 강의가 청중에게 던진 것이지 답한 것이 아닙니다. 그 질문에 대한 내 답을 슬라이드가 준 것처럼 채점 기준이나 모범 답안에 쓰지 마세요. 채점 기준은 슬라이드가 말하는 내용에 두고, 슬라이드가 답하지 않으면 슬라이드가 답하는 다른 문제를 쓰세요.`;
 
 function blueprintBlock(slots: readonly PlannedSlot[], escape: (s: string) => string): string {
   const lines = slots.map((s, i) => {
-    const slideText = s.slides.length === 1 ? `slide ${s.slides[0]}` : `slides ${s.slides.join(', ')}`;
-    return `${i + 1}. type "${s.type}", difficulty ${s.difficulty}, ${s.marks} mark${s.marks === 1 ? '' : 's'}, ${s.points} marking point${s.points === 1 ? '' : 's'}, topic ${JSON.stringify(escape(s.topic))}, based on ${slideText}`;
+    return `${i + 1}. type "${s.type}", 난이도 ${s.difficulty}, ${s.marks}점, 채점 기준 ${s.points}개, 주제 ${JSON.stringify(escape(s.topic))}, 근거 슬라이드 ${s.slides.join(', ')}`;
   });
-  return `THE QUESTIONS TO WRITE: exactly ${slots.length}, in this order, as the "questions" list
+  return `작성할 문제: 정확히 ${slots.length}개, 이 순서대로 "questions" 목록에
 ${lines.join('\n')}
-Keep each question's type, difficulty, marks and number of marking points as given, and base it on the slides named. A question may also use other slides when it needs them. The lines above tell you what to write; they are not the questions. Write the text the student will read in each question's "prompt".`;
+각 문제의 유형, 난이도, 배점, 채점 기준 개수는 주어진 대로 지키고, 지정된 슬라이드를 바탕으로 만드세요. 필요하면 다른 슬라이드도 쓸 수 있습니다. 위 줄은 무엇을 쓸지 알려 줄 뿐 문제 자체가 아닙니다. 학생이 읽을 문장은 각 문제의 "prompt"에 쓰세요.`;
 }
+
+/** What every generated text must look like: Korean for the student, the slides' own wording for evidence, the format's own names for the app. */
+export const KOREAN_OUTPUT_RULE = `언어: 학생이 읽는 모든 글(문제, 답, 카드, 노트, 힌트, 채점 기준, 설명)은 자연스러운 한국어로 쓰세요. 전문 용어는 슬라이드에 나온 표기를 따르고, 필요하면 처음 한 번 괄호 안에 원어를 덧붙이세요. 단, "quote"는 슬라이드 문장을 원래 언어 그대로 한 글자도 바꾸지 말고 복사하며 번역하지 마세요. JSON 키, "type"·"kind"·"basis" 값, 강의 ref(L1), 슬라이드 번호는 형식에 적힌 그대로 둡니다.`;
 
 export function studyPackPrompt(o: PromptOptions): string {
   const n = packCounts(o);
   const escape = o.escape ?? ((s: string) => s);
   const planned = !!o.blueprint && o.blueprint.length > 0;
   const want = [
-    n.notes > 0 && `${n.notes} notes (summaries, definitions, comparison tables, common mistakes)`,
-    n.cards > 0 && `${n.cards} flashcards`,
-    n.questions > 0 && (planned ? `${n.questions} exam questions (listed below) with marking points` : `${n.questions} exam-style questions with marking points`),
+    n.notes > 0 && `노트 ${n.notes}개(요약, 정의, 비교표, 자주 하는 실수)`,
+    n.cards > 0 && `플래시카드 ${n.cards}장`,
+    n.questions > 0 && (planned ? `채점 기준이 있는 시험 문제 ${n.questions}개(아래 목록)` : `채점 기준이 있는 시험형 문제 ${n.questions}개`),
   ]
     .filter(Boolean)
     .join(', ');
   // The format example shows all three lists; a model fills in the ones it was not asked for unless told to leave them empty.
   const unwanted = (['notes', 'cards', 'questions'] as const).filter((k) => n[k] === 0);
-  const emptyLists = unwanted.length > 0 && unwanted.length < 3 ? ` Write only what is asked for: leave ${unwanted.map((k) => `"${k}"`).join(' and ')} as empty lists ([]).` : '';
+  const emptyLists = unwanted.length > 0 && unwanted.length < 3 ? ` 요청한 것만 쓰세요. ${unwanted.map((k) => `"${k}"`).join('와 ')}은(는) 빈 목록([])으로 두세요.` : '';
   const compact =
     o.outputTokens === undefined
       ? ''
-      : `\n9. Your whole answer is limited to about ${Math.floor(o.outputTokens * 0.5).toLocaleString('en-US')} words and is thrown away if it is cut off, so it must be COMPLETE valid JSON. Keep every field short: a quote of 6 to 15 words, a note block of at most 80 words, one or two sources per item. If you cannot fit all the items, write fewer items, never a longer one.`;
-  return `You are helping a university student study from lecture slides. The lecture text follows after this message.
+      : `\n9. 답 전체는 약 ${Math.floor(o.outputTokens * 0.35).toLocaleString('ko-KR')}단어로 제한되며 중간에 잘리면 버려지므로, 반드시 완결된 올바른 JSON이어야 합니다. 모든 항목을 짧게 쓰세요. 인용문은 6~15단어, 노트 블록은 최대 60단어, 항목당 출처는 한두 개입니다. 항목을 다 넣을 수 없으면 항목 수를 줄이고, 항목을 길게 쓰지 마세요.`;
+  return `당신은 대학생이 강의 슬라이드로 공부하도록 돕고 있습니다. 강의 텍스트는 이 메시지 뒤에 이어집니다.
 
-TASK
-Create ${want || 'study material'} from the lectures below and return them as ONE JSON object in the "${PACK_FORMAT}" format shown at the end. Return only the JSON (a single code block is fine).${emptyLists}
+과제
+아래 강의로 ${want || '학습 자료'}을(를) 만들고, 끝에 보인 "${PACK_FORMAT}" 형식의 JSON 객체 하나로 돌려주세요. JSON만 돌려주세요(코드 블록 하나는 괜찮습니다).${emptyLists}
 
-RULES — these matter more than quantity
-1. The slides are the source of truth. Do not invent lecture content, definitions, proof steps, exam rules or what the professor prefers.
-2. Every item needs "basis":
-   - "lecture"   = the item is stated on the slides (you MUST give a quote);
-   - "derived"   = a reasonable explanation derived from what the slides say;
-   - "outside"   = extra knowledge added for understanding that is NOT on the slides;
-   - "uncertain" = you are not sure or the slides do not support it.
-3. Every item needs "sources": [{"lecture": "<ref>", "slide": <slide number>, "quote": "<exact words copied from that slide>"}]. Copy quotes character for character from the slide (3 to 25 words; use "..." to skip words). The student's app checks every quote against the real slide and flags the ones that do not match, so do not paraphrase inside quotes. A quote must support the WHOLE item: if any part of a card, note or answer is general knowledge that the quoted words do not say (even when it is true), the item's basis is "outside" or "derived", never "lecture"; where the slide's own wording differs from the textbook meaning, write what the slide says.
-4. If a slide's text is marked as unreadable, an image, or has "Extraction caveats", do not make claims about what is in it.
-5. If the slides contain an error or contradiction, say so in the item (basis "uncertain") instead of silently fixing it.
-6. Question marks: the "rubric" marks must add up to the question's "marks". Follow the QUESTIONS guidance below for kinds, difficulty, marking points and model answers.
-7. Use LaTeX in $...$ for mathematics. Do not use any other markup that needs rendering.
-8. Allowed values — card "type": ${CARD_TYPES.join(', ')}. note "kind": ${NOTE_KINDS.join(', ')}. question "type": ${QUESTION_TYPES.join(', ')}. "basis": ${BASES.join(', ')}. For "mcq" give "options": [{"text":…, "correct":…}] with at least one correct; for "truefalse" give "answer": true|false.${compact}
-${n.questions > 0 ? `\n${QUESTION_RULES}\n` : ''}${planned ? `\n${blueprintBlock(o.blueprint!, escape)}\n` : ''}${o.examStyle?.trim() ? `\nPROFESSOR'S EXAM STYLE (follow it when writing questions and answers; where it differs from the QUESTIONS guidance, the professor's style wins):\n${o.examStyle.trim()}\n` : ''}
-FORMAT
+${KOREAN_OUTPUT_RULE}
+
+규칙 (양보다 중요합니다)
+1. 슬라이드가 사실의 기준입니다. 강의 내용, 정의, 증명 단계, 시험 규칙, 교수가 선호하는 것을 지어내지 마세요.
+2. 모든 항목에는 "basis"가 필요합니다.
+   - "lecture"   = 항목이 슬라이드에 적혀 있음(반드시 quote를 주세요)
+   - "derived"   = 슬라이드 내용에서 합리적으로 이끌어 낸 설명
+   - "outside"   = 이해를 돕기 위해 더한, 슬라이드에 없는 지식
+   - "uncertain" = 확실하지 않거나 슬라이드가 뒷받침하지 않음
+3. 모든 항목에는 "sources"가 필요합니다: [{"lecture": "<ref>", "slide": <슬라이드 번호>, "quote": "<그 슬라이드에서 그대로 복사한 문장>"}]. quote는 슬라이드에서 한 글자도 바꾸지 말고 복사하세요(3~25단어, 단어를 건너뛸 때는 "..."). 학생의 앱이 모든 quote를 실제 슬라이드와 대조해 맞지 않는 것을 표시하므로 quote 안에서 바꿔 말하거나 번역하지 마세요. quote는 항목 전체를 뒷받침해야 합니다. 카드, 노트, 답의 어느 부분이라도 인용한 문장이 말하지 않는 일반 지식이면(사실이라도) 그 항목의 basis는 "outside"나 "derived"이고 절대 "lecture"가 아닙니다. 슬라이드의 표현이 교과서의 뜻과 다르면 슬라이드가 말하는 대로 쓰세요.
+4. 슬라이드 텍스트가 읽을 수 없음, 이미지로 표시되었거나 "Extraction caveats"가 있으면 그 안의 내용을 단정하지 마세요.
+5. 슬라이드에 오류나 모순이 있으면 조용히 고치지 말고 항목 안에서 밝히세요(basis "uncertain").
+6. 배점: "rubric" 점수의 합은 문제의 "marks"와 같아야 합니다. 유형, 난이도, 채점 기준, 모범 답안은 아래 문제 작성 지침을 따르세요.
+7. 수학은 $...$ 안의 LaTeX로 쓰세요. 렌더링이 필요한 다른 마크업은 쓰지 마세요.
+8. 허용 값: 카드 "type": ${CARD_TYPES.join(', ')}. 노트 "kind": ${NOTE_KINDS.join(', ')}. 문제 "type": ${QUESTION_TYPES.join(', ')}. "basis": ${BASES.join(', ')}. "mcq"는 정답이 하나 이상인 "options": [{"text":…, "correct":…}]를, "truefalse"는 "answer": true|false를 주세요.${compact}
+${n.questions > 0 ? `\n${QUESTION_RULES}\n` : ''}${planned ? `\n${blueprintBlock(o.blueprint!, escape)}\n` : ''}${o.examStyle?.trim() ? `\n교수의 출제 스타일(문제와 답을 쓸 때 따르세요. 문제 작성 지침과 다르면 교수의 스타일이 우선입니다):\n${o.examStyle.trim()}\n` : ''}
+형식
 ${JSON.stringify(SCHEMA_EXAMPLE, null, 2)}`;
 }
-
 /** The questions that already exist, as a block of data for the prompt (the caller escapes each line). */
 export function alreadyAskedBlock(lines: readonly string[]): string {
   const cleaned = lines.map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);

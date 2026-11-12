@@ -1,19 +1,20 @@
-## What and why
+## 변경 내용과 이유
 
-<!-- What does this change, and why? Link the issue it follows from (anything bigger than a typo or a small fix should have one). -->
+<!-- 사용자가 겪던 문제와 변경 후 동작을 설명하세요. 관련 이슈가 있으면 연결하세요. -->
 
-## How it was checked
+## 검증 결과
 
-<!-- Paste the commands you ran and what they reported. -->
+<!-- 실행한 명령과 결과를 적으세요. 확인하지 못한 부분도 구분하세요. -->
 
-- [ ] `pnpm check` (types, Worker types, unit tests, browser tests)
+- [ ] `pnpm check`
 - [ ] `pnpm scan:secrets`
+- [ ] `pnpm check:attribution`
 
-## Checklist
+## 확인 사항
 
-- [ ] A fix comes with a test that fails without it, using the real failing input (synthetic if the real one is private). A new planner or question-check rule is tested for what it finds and for what it must leave alone.
-- [ ] Wording stays honest: an estimate is labelled an estimate, and a slide that says nothing is said to say nothing.
-- [ ] The safety rules still hold: nothing sends lecture text anywhere without the student seeing it first, the browser never supplies a prompt, a model or an output length, and AI stays off and fails closed when a budget, quota or billing fact is unclear. If this touches `src/core/ai/` or `worker/`, I read [docs/FINANCIAL-SAFETY.md](https://github.com/zuhairhalawa/studyai/blob/main/docs/FINANCIAL-SAFETY.md).
-- [ ] No lecture slides, study packs, exports, API keys or personal data are included.
-- [ ] No new dependency, or the reason for it is stated above (and `pnpm notices` was run if dependencies changed).
-- [ ] A decision that is not obvious is recorded in [docs/DECISIONS.md](https://github.com/zuhairhalawa/studyai/blob/main/docs/DECISIONS.md).
+- [ ] 실제 동작을 검사하며, 개인 자료 대신 합성 파일로 테스트했습니다.
+- [ ] 추정과 확인된 내용을 구분하고 추출하지 못한 정보를 명확히 표시합니다.
+- [ ] 전송 전 내용 확인, 로컬 API 경계와 서버의 토큰 보관 원칙을 유지합니다.
+- [ ] 강의 원본, 학습 내보내기 파일, 인증 정보와 개인정보를 포함하지 않았습니다.
+- [ ] 새 의존성의 이유를 설명하고 필요한 경우 `pnpm notices`를 실행했습니다.
+- [ ] AI 생성 서명이나 AI 공동 작성자 표기를 넣지 않았습니다.

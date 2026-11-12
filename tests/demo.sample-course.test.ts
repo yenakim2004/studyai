@@ -76,12 +76,12 @@ describe('only invented content', () => {
     for (const { bytes } of sampleLectures()) {
       const deck = await parsePptx(bytes);
       parts.push(deck.meta.title ?? '', deck.meta.author ?? '', ...deck.slides.map((s) => `${s.text}\n${s.notes}`));
-      expect(deck.meta.author).toBe('Invented Author');
+      expect(deck.meta.author).toBe('가상의 저자');
     }
     const text = parts.join('\n');
     expect(text).not.toMatch(/https?:|www\.|@[a-z]|\.com\b|\.edu\b|\.org\b/i);
-    expect(text).not.toMatch(/universit|college|institute|professor|\bProf\b|\bDr\b/i);
-    expect(SAMPLE_COURSE.name).toMatch(/invented/i);
+    expect(text).not.toMatch(/universit|college|institute|professor|\bProf\b|\bDr\b|대학교|교수/i);
+    expect(SAMPLE_COURSE.name).toMatch(/가상/);
   });
 });
 
@@ -93,7 +93,7 @@ describe('loadSampleCourse', () => {
     expect(course?.name).toBe(SAMPLE_COURSE.name);
 
     const lectures = await listLectures(db, courseId);
-    expect(lectures.map((l) => l.title)).toEqual(['Lecture 1 - Reading a sky chart', 'Lecture 2 - Dead reckoning aloft']);
+    expect(lectures.map((l) => l.title)).toEqual(['1강 - 하늘 지도 읽기', '2강 - 공중 추측 항법']);
     expect((await loadSlides(db, lectures[0]!.id)).length).toBe(7);
 
     const cards = await db.cards.where('courseId').equals(courseId).toArray();
@@ -111,8 +111,8 @@ describe('loadSampleCourse', () => {
     const { courseId } = await loadSampleCourse(db);
     const index = new SearchIndex();
     for (const l of await listLectures(db, courseId)) index.addLecture(l, SAMPLE_COURSE.name, await loadSlides(db, l.id));
-    expect(index.search('head wind').some((h) => h.lectureTitle.includes('Dead reckoning'))).toBe(true);
-    expect(index.search('mooring').length).toBeGreaterThan(0);
+    expect(index.search('맞바람').some((h) => h.lectureTitle.includes('추측 항법'))).toBe(true);
+    expect(index.search('계류탑').length).toBeGreaterThan(0);
   });
 
   it('opens the same course when asked twice, and makes a new one only after it was deleted', async () => {

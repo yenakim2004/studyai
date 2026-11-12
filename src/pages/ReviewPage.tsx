@@ -16,10 +16,10 @@ import { NotFound } from './NotFound';
 const db = getDb();
 
 const BUTTONS: { rating: Rating; label: string; key: string; cls: string }[] = [
-  { rating: 1, label: 'Again', key: '1', cls: 'border-bad/60 text-bad hover:bg-bad-soft' },
-  { rating: 2, label: 'Hard', key: '2', cls: 'border-warn/60 text-warn hover:bg-warn-soft' },
-  { rating: 3, label: 'Good', key: '3', cls: 'border-ok/60 text-ok hover:bg-ok-soft' },
-  { rating: 4, label: 'Easy', key: '4', cls: 'border-info/60 text-info hover:bg-sunken' },
+  { rating: 1, label: '다시', key: '1', cls: 'border-bad/60 text-bad hover:bg-bad-soft' },
+  { rating: 2, label: '어려움', key: '2', cls: 'border-warn/60 text-warn hover:bg-warn-soft' },
+  { rating: 3, label: '알맞음', key: '3', cls: 'border-ok/60 text-ok hover:bg-ok-soft' },
+  { rating: 4, label: '쉬움', key: '4', cls: 'border-info/60 text-info hover:bg-sunken' },
 ];
 
 export function ReviewPage() {
@@ -71,7 +71,7 @@ export function ReviewPage() {
         setNow(Date.now());
         bump((n) => n + 1);
       } catch (err) {
-        toast.show(err instanceof Error ? err.message : 'Could not save that answer.', 'error');
+        toast.show(err instanceof Error ? err.message : '답을 저장하지 못했습니다.', 'error');
       } finally {
         setBusy(false);
       }
@@ -97,7 +97,7 @@ export function ReviewPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [card, revealed, rate, editing]);
 
-  if (course === null) return <NotFound what="course" />;
+  if (course === null) return <NotFound what="과목이" />;
   if (!course || !allCards || !stats || !lectures) {
     return (
       <div className="p-6">
@@ -117,22 +117,22 @@ export function ReviewPage() {
           <ArrowLeft className="size-4" aria-hidden /> {course.name}
         </Link>
         <p className="text-sm tabular-nums text-ink-2" aria-live="polite">
-          {card ? `${queue.length} left` : 'Finished'}
-          {session.current.done > 0 && `, ${session.current.done} answered`}
+          {card ? `${queue.length}장 남음` : '끝'}
+          {session.current.done > 0 && `, ${session.current.done}장 답함`}
         </p>
       </header>
-      <div className="mt-3 h-1 overflow-hidden rounded-full bg-sunken" role="progressbar" aria-label="Session progress" aria-valuemin={0} aria-valuemax={Math.max(1, total)} aria-valuenow={Math.min(session.current.done, Math.max(1, total))}>
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-sunken" role="progressbar" aria-label="이번 복습 진행률" aria-valuemin={0} aria-valuemax={Math.max(1, total)} aria-valuenow={Math.min(session.current.done, Math.max(1, total))}>
         <div className="h-full bg-accent transition-[width]" style={{ width: `${total ? Math.min(100, (session.current.done / total) * 100) : 100}%` }} />
       </div>
 
       {card && preview ? (
-        <main className="mt-8 flex flex-col" aria-label="Flashcard">
+        <main className="mt-8 flex flex-col" aria-label="플래시카드">
           <p className="sr-only" aria-live="polite">
-            Card {Math.min(session.current.done + 1, Math.max(total, 1))}
+            카드 {Math.min(session.current.done + 1, Math.max(total, 1))}
           </p>
           <div className="min-h-72 rounded-[var(--radius-panel)] border border-rule bg-surface p-6 md:p-8">
             <div className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
-              <span>{card.fsrs.state === 0 ? 'New card' : card.fsrs.state === 2 ? 'Review' : 'Learning'}</span>
+              <span>{card.fsrs.state === 0 ? '새 카드' : card.fsrs.state === 2 ? '복습' : '학습 중'}</span>
               {card.lectureId && <span>{lectures.find((l) => l.id === card.lectureId)?.title}</span>}
             </div>
             <div className="mt-4 text-[1.15rem]">
@@ -155,10 +155,10 @@ export function ReviewPage() {
           <div className="mt-5">
             {!revealed ? (
               <Button variant="primary" className="w-full" onClick={() => setRevealed(true)}>
-                Show answer <span className="ml-2 rounded bg-black/15 px-1.5 text-xs">Space</span>
+                답 보기 <span className="ml-2 rounded bg-black/15 px-1.5 text-xs">Space</span>
               </Button>
             ) : (
-              <div role="group" aria-label="How well did you remember?" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div role="group" aria-label="얼마나 잘 기억했나요?" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {BUTTONS.map((b) => (
                   <button
                     key={b.rating}
@@ -178,35 +178,35 @@ export function ReviewPage() {
             <div className="mt-3 flex justify-between text-sm">
               <span className="flex items-center gap-4">
                 <button type="button" className="inline-flex items-center gap-1.5 text-ink-2 hover:text-ink" onClick={() => setEditing(true)}>
-                  <Pencil className="size-4" aria-hidden /> Edit this card
+                  <Pencil className="size-4" aria-hidden /> 이 카드 편집
                 </button>
                 {revealed && (
                   <Link
                     to={`/course/${course.id}/tutor${card.sources[0] ? `?lecture=${card.sources[0].lectureId}&slide=${card.sources[0].slide}` : card.lectureId ? `?lecture=${card.lectureId}` : ''}`}
-                    state={{ question: `Explain this flashcard to me: ${card.front.slice(0, 600)}` }}
+                    state={{ question: `이 플래시카드를 설명해 주세요: ${card.front.slice(0, 600)}` }}
                     className="inline-flex items-center gap-1.5 text-ink-2 hover:text-ink"
                   >
-                    <Sparkles className="size-4" aria-hidden /> Ask the tutor
+                    <Sparkles className="size-4" aria-hidden /> 튜터에게 묻기
                   </Link>
                 )}
               </span>
-              <span className="text-ink-3">Keys: Space to reveal, 1–4 to answer</span>
+              <span className="text-ink-3">단축키: Space로 답 보기, 1–4로 평가</span>
             </div>
           </div>
         </main>
       ) : (
-        <main className="mt-12 flex flex-1 flex-col items-center text-center" aria-label="Session finished">
-          <h1 className="text-2xl font-semibold tracking-tight">{session.current.done > 0 ? 'Session finished' : stats.approved === 0 ? 'No approved cards yet' : 'Nothing to review right now'}</h1>
+        <main className="mt-12 flex flex-1 flex-col items-center text-center" aria-label="복습 끝">
+          <h1 className="text-2xl font-semibold tracking-tight">{session.current.done > 0 ? '복습을 마쳤습니다' : stats.approved === 0 ? '아직 승인한 카드가 없습니다' : '지금 복습할 카드가 없습니다'}</h1>
           {session.current.done > 0 && (
             <p className="mt-3 text-ink-2">
-              You answered {session.current.done} card{session.current.done === 1 ? '' : 's'}; {session.current.good} of them Good or Easy ({Math.round((session.current.good / session.current.done) * 100)}%).
+              카드 {session.current.done}장에 답했고, 그중 {session.current.good}장이 알맞음 또는 쉬움이었습니다({Math.round((session.current.good / session.current.done) * 100)}%).
             </p>
           )}
-          {next && <p className="mt-2 text-ink-2">The next card is due in {intervalLabel(next - now)}.</p>}
-          {!next && stats.approved > 0 && <p className="mt-2 text-ink-2">You have seen every card for now. New ones appear tomorrow, or add more in the Flashcards tab.</p>}
-          {stats.approved === 0 && <p className="mt-2 max-w-prose text-ink-2">Approve cards in the Flashcards tab (or add your own) before studying.</p>}
+          {next && <p className="mt-2 text-ink-2">다음 카드는 {intervalLabel(next - now)} 뒤에 복습합니다.</p>}
+          {!next && stats.approved > 0 && <p className="mt-2 text-ink-2">지금은 모든 카드를 봤습니다. 새 카드는 내일 나타나며, 플래시카드 탭에서 더 추가할 수도 있습니다.</p>}
+          {stats.approved === 0 && <p className="mt-2 max-w-prose text-ink-2">공부하기 전에 플래시카드 탭에서 카드를 승인하세요(또는 직접 추가하세요).</p>}
           <Link to={`/course/${course.id}/cards`} className="mt-6 inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-rule-strong bg-surface px-4 text-sm font-medium hover:bg-sunken">
-            Back to flashcards
+            플래시카드로 돌아가기
           </Link>
         </main>
       )}

@@ -1,6 +1,6 @@
 /**
  * The local ports of the browser tests: the production build (`preview`), the real local Worker with the scripted fake model
- * (`worker`), the same Worker behind the sign-in gate (`gate`), a stand-in for Google's endpoint (`stub`) and the static public
+ * (`worker`), a hosted Worker with AI disabled (`gate`), a fake OpenAI issuer (`stub`) and the static public
  * demo build (`demo`, served under DEMO_PATH like GitHub Pages does).
  *
  * The defaults are fixed numbers. On a machine where the system has reserved them (Windows does this for some ranges, and the

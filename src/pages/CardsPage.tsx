@@ -22,10 +22,10 @@ const DEFAULT_NEW_PER_DAY = 15;
 
 function stateLabel(c: CardRow, now: number): string {
   const s = c.fsrs;
-  if (s.state === 0) return 'New';
+  if (s.state === 0) return '새 카드';
   const wait = s.due - now;
-  if (wait <= 0) return 'Due now';
-  return `${s.state === 2 ? 'Review' : 'Learning'}, due in ${intervalLabel(wait)}`;
+  if (wait <= 0) return '지금 복습';
+  return `${s.state === 2 ? '복습' : '학습 중'}, ${intervalLabel(wait)} 뒤 복습`;
 }
 
 export function CardsPage() {
@@ -84,15 +84,15 @@ export function CardsPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="study-h" className="text-lg font-semibold">
-              Study now
+              지금 공부하기
             </h2>
             <p className="text-sm text-ink-2">
-              {queue.length > 0 ? `${queue.length} card${queue.length === 1 ? '' : 's'} ready: ${stats.dueNow} due and up to ${Math.max(0, perDay - stats.newToday)} new.` : stats.approved === 0 ? 'No approved cards yet.' : 'Nothing is due right now.'}
+              {queue.length > 0 ? `카드 ${queue.length}장 준비됨: 복습할 카드 ${stats.dueNow}장과 새 카드 최대 ${Math.max(0, perDay - stats.newToday)}장.` : stats.approved === 0 ? '아직 승인한 카드가 없습니다.' : '지금 복습할 카드가 없습니다.'}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 whitespace-nowrap text-[13px] text-ink-2">
-              New cards per day
+              하루 새 카드 수
               <Select value={String(perDay)} onChange={(e) => void setNewPerDay(Number(e.target.value))} className="min-h-9 w-20 text-[13px]">
                 {[5, 10, 15, 20, 30, 50, 100].map((n) => (
                   <option key={n} value={n}>
@@ -103,23 +103,23 @@ export function CardsPage() {
             </label>
             {queue.length > 0 ? (
               <Link to={`/course/${course.id}/review`} className="inline-flex min-h-10 items-center gap-2 rounded-[var(--radius-control)] bg-accent px-4 text-sm font-medium text-accent-ink hover:brightness-110">
-                <Play className="size-4" aria-hidden /> Start review
+                <Play className="size-4" aria-hidden /> 복습 시작
               </Link>
             ) : (
               <Button variant="primary" disabled>
-                <Play className="size-4" aria-hidden /> Start review
+                <Play className="size-4" aria-hidden /> 복습 시작
               </Button>
             )}
           </div>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-panel)] border border-rule bg-rule sm:grid-cols-4 lg:grid-cols-7">
-          {statTile('Due now', stats.dueNow)}
-          {statTile('New', stats.newCards)}
-          {statTile('Learning', stats.learning)}
-          {statTile('Review', stats.review)}
-          {statTile('Difficult', stats.difficult)}
-          {statTile('Reviewed today', stats.reviewedToday)}
-          {statTile('Accuracy', stats.accuracy30d === undefined ? 'No data' : `${Math.round(stats.accuracy30d * 100)}%`, stats.reviews30d ? `last 30 days, ${stats.reviews30d} reviews` : undefined)}
+          {statTile('지금 복습', stats.dueNow)}
+          {statTile('새 카드', stats.newCards)}
+          {statTile('학습 중', stats.learning)}
+          {statTile('복습', stats.review)}
+          {statTile('어려운 카드', stats.difficult)}
+          {statTile('오늘 복습', stats.reviewedToday)}
+          {statTile('정답률', stats.accuracy30d === undefined ? '기록 없음' : `${Math.round(stats.accuracy30d * 100)}%`, stats.reviews30d ? `최근 30일, 복습 ${stats.reviews30d}회` : undefined)}
         </dl>
       </section>
 
@@ -128,9 +128,9 @@ export function CardsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 id="pending-h" className="text-lg font-semibold">
-                {pending.length} card{pending.length === 1 ? '' : 's'} waiting for your decision
+                결정을 기다리는 카드 {pending.length}장
               </h2>
-              <p className="text-sm text-ink-2">Cards from study packs and the slide scanner are never studied until you approve them. Check the source for anything you are unsure about.</p>
+              <p className="text-sm text-ink-2">학습 팩과 슬라이드 스캐너로 만든 카드는 승인하기 전까지 학습에 쓰이지 않습니다. 확실하지 않은 카드는 출처를 확인하세요.</p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -138,10 +138,10 @@ export function CardsPage() {
                 variant="primary"
                 onClick={async () => {
                   await setCardStatus(db, pending.filter((c) => c.sources.every((s) => s.verified !== false)).map((c) => c.id), 'approved');
-                  toast.show('Approved every pending card whose quotes were not contradicted by the slides.', 'ok');
+                  toast.show('인용문이 슬라이드와 어긋나지 않는 대기 카드를 모두 승인했습니다.', 'ok');
                 }}
               >
-                <Check className="size-4" aria-hidden /> Approve all with no source problems
+                <Check className="size-4" aria-hidden /> 출처 문제가 없는 카드 모두 승인
               </Button>
             </div>
           </div>
@@ -153,15 +153,15 @@ export function CardsPage() {
                   {lectureTitle(c.lectureId) && <span>{lectureTitle(c.lectureId)}</span>}
                   <BasisChip basis={c.basis} sources={c.sources} />
                   <SourceStatusChip sources={c.sources} />
-                  {c.origin === 'auto' && <span className="rounded bg-sunken px-1.5">auto-extracted, check it</span>}
+                  {c.origin === 'auto' && <span className="rounded bg-sunken px-1.5">자동 추출, 확인 필요</span>}
                 </div>
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
                   <div>
-                    <p className="text-xs font-medium text-ink-3">Front</p>
+                    <p className="text-xs font-medium text-ink-3">앞면</p>
                     <LazyMarkdown>{c.front}</LazyMarkdown>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-ink-3">Back</p>
+                    <p className="text-xs font-medium text-ink-3">뒷면</p>
                     <LazyMarkdown>{c.back}</LazyMarkdown>
                   </div>
                 </div>
@@ -169,65 +169,65 @@ export function CardsPage() {
                   <SourceList sources={c.sources} />
                   <div className="flex gap-2">
                     <Button size="sm" variant="primary" onClick={() => void setCardStatus(db, [c.id], 'approved')}>
-                      <Check className="size-4" aria-hidden /> Approve
+                      <Check className="size-4" aria-hidden /> 승인
                     </Button>
                     <Button size="sm" onClick={() => setEditing(c)}>
-                      <Pencil className="size-4" aria-hidden /> Edit
+                      <Pencil className="size-4" aria-hidden /> 편집
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void setCardStatus(db, [c.id], 'rejected')}>
-                      <X className="size-4" aria-hidden /> Reject
+                      <X className="size-4" aria-hidden /> 거절
                     </Button>
                   </div>
                 </div>
               </li>
             ))}
           </ul>
-          {pending.length > 20 && <p className="mt-2 text-sm text-ink-2">Showing the first 20. Approve or reject these and the rest will appear.</p>}
+          {pending.length > 20 && <p className="mt-2 text-sm text-ink-2">처음 20장만 보입니다. 이 카드들을 승인하거나 거절하면 나머지가 나타납니다.</p>}
         </section>
       )}
 
       <section aria-labelledby="all-h">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="all-h" className="text-lg font-semibold">
-            All cards ({cards.length})
+            모든 카드({cards.length})
           </h2>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => setCreating(true)}>
-              <Plus className="size-4" aria-hidden /> New card
+              <Plus className="size-4" aria-hidden /> 새 카드
             </Button>
             <Button size="sm" onClick={() => setDrafting(true)} disabled={lectures.length === 0}>
-              <WandSparkles className="size-4" aria-hidden /> Draft from slides
+              <WandSparkles className="size-4" aria-hidden /> 슬라이드에서 초안 만들기
             </Button>
           </div>
         </div>
 
         {cards.length === 0 ? (
           <div className="mt-3">
-            <EmptyState title="No flashcards yet">
-              Add cards by hand, let the app draft some from your slides (no AI needed), or import a study pack made with your own AI from the “Study packs” menu above.
+            <EmptyState title="아직 플래시카드가 없습니다">
+              직접 카드를 추가하거나, 앱이 슬라이드에서 초안을 만들게 하거나(AI 필요 없음), 위의 “학습 팩” 메뉴에서 다른 AI로 만든 학습 팩을 가져오세요.
             </EmptyState>
           </div>
         ) : (
           <>
             <div className="mt-3 grid gap-2 sm:grid-cols-4">
               <label className="sr-only" htmlFor="cf-q">
-                Search cards
+                카드 검색
               </label>
-              <TextInput id="cf-q" type="search" placeholder="Search cards" value={text} onChange={(e) => setText(e.target.value)} />
+              <TextInput id="cf-q" type="search" placeholder="카드 검색" value={text} onChange={(e) => setText(e.target.value)} />
               <label className="sr-only" htmlFor="cf-status">
-                Status
+                상태
               </label>
               <Select id="cf-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="all">All statuses</option>
-                <option value="approved">Approved</option>
-                <option value="pending">Waiting for review</option>
-                <option value="rejected">Rejected</option>
+                <option value="all">모든 상태</option>
+                <option value="approved">승인됨</option>
+                <option value="pending">검토 대기</option>
+                <option value="rejected">거절됨</option>
               </Select>
               <label className="sr-only" htmlFor="cf-lecture">
-                Lecture
+                강의
               </label>
               <Select id="cf-lecture" value={lectureFilter} onChange={(e) => setLectureFilter(e.target.value)}>
-                <option value="">All lectures</option>
+                <option value="">모든 강의</option>
                 {lectures.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.title}
@@ -235,10 +235,10 @@ export function CardsPage() {
                 ))}
               </Select>
               <label className="sr-only" htmlFor="cf-type">
-                Kind
+                종류
               </label>
               <Select id="cf-type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                <option value="">All kinds</option>
+                <option value="">모든 종류</option>
                 {CARD_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {CARD_TYPE_LABEL[t]}
@@ -247,12 +247,12 @@ export function CardsPage() {
               </Select>
             </div>
             <p className="mt-2 text-sm text-ink-2" aria-live="polite">
-              {shown.length} shown
+              {shown.length}장 표시
               {status === 'rejected' && shown.length > 0 && (
                 <>
                   {' '}
                   <button type="button" className="text-bad underline underline-offset-2" onClick={() => setDeleting(shown)}>
-                    Delete these {shown.length}
+                    이 {shown.length}장 삭제
                   </button>
                 </>
               )}
@@ -266,24 +266,24 @@ export function CardsPage() {
                     <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
                       <span>{CARD_TYPE_LABEL[c.type]}</span>
                       {lectureTitle(c.lectureId) && <span>{lectureTitle(c.lectureId)}</span>}
-                      <span>{c.status === 'approved' ? stateLabel(c, now) : c.status === 'pending' ? 'Waiting for review' : 'Rejected'}</span>
-                      {c.fsrs.lapses > 0 && <span>{c.fsrs.lapses} lapse{c.fsrs.lapses === 1 ? '' : 's'}</span>}
+                      <span>{c.status === 'approved' ? stateLabel(c, now) : c.status === 'pending' ? '검토 대기' : '거절됨'}</span>
+                      {c.fsrs.lapses > 0 && <span>잊음 {c.fsrs.lapses}회</span>}
                       <BasisChip basis={c.basis} sources={c.sources} />
                     </p>
                   </div>
                   <Menu
-                    label={`Actions for card: ${c.front.slice(0, 40)}`}
+                    label={`카드 작업: ${c.front.slice(0, 40)}`}
                     items={[
-                      { label: 'Edit', icon: <FilePen className="size-4" aria-hidden />, onSelect: () => setEditing(c) },
-                      ...(c.status !== 'approved' ? [{ label: 'Approve', icon: <Check className="size-4" aria-hidden />, onSelect: () => void setCardStatus(db, [c.id], 'approved') }] : []),
-                      ...(c.status !== 'rejected' ? [{ label: 'Reject', icon: <X className="size-4" aria-hidden />, onSelect: () => void setCardStatus(db, [c.id], 'rejected') }] : []),
-                      { label: 'Delete', icon: <Trash2 className="size-4" aria-hidden />, danger: true, onSelect: () => setDeleting([c]) },
+                      { label: '편집', icon: <FilePen className="size-4" aria-hidden />, onSelect: () => setEditing(c) },
+                      ...(c.status !== 'approved' ? [{ label: '승인', icon: <Check className="size-4" aria-hidden />, onSelect: () => void setCardStatus(db, [c.id], 'approved') }] : []),
+                      ...(c.status !== 'rejected' ? [{ label: '거절', icon: <X className="size-4" aria-hidden />, onSelect: () => void setCardStatus(db, [c.id], 'rejected') }] : []),
+                      { label: '삭제', icon: <Trash2 className="size-4" aria-hidden />, danger: true, onSelect: () => setDeleting([c]) },
                     ]}
                   />
                 </li>
               ))}
             </ul>
-            {shown.length > 200 && <p className="mt-2 text-sm text-ink-2">Showing the 200 newest. Use the filters to narrow the list.</p>}
+            {shown.length > 200 && <p className="mt-2 text-sm text-ink-2">최근 200장만 보입니다. 필터로 목록을 좁히세요.</p>}
           </>
         )}
       </section>
@@ -295,27 +295,27 @@ export function CardsPage() {
       <Dialog
         open={!!deleting}
         onClose={() => setDeleting(undefined)}
-        title={`Delete ${deleting?.length ?? 0} card${deleting?.length === 1 ? '' : 's'}?`}
+        title={`카드 ${deleting?.length ?? 0}장을 삭제할까요?`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeleting(undefined)}>
-              Cancel
+              취소
             </Button>
             <Button
               variant="danger"
               onClick={async () => {
                 if (!deleting) return;
                 await deleteCards(db, deleting.map((c) => c.id));
-                toast.show('Deleted.', 'ok');
+                toast.show('삭제했습니다.', 'ok');
                 setDeleting(undefined);
               }}
             >
-              Delete permanently
+              영구 삭제
             </Button>
           </>
         }
       >
-        <p className="text-sm text-ink-2">The cards and their review history will be removed from this device. This cannot be undone.</p>
+        <p className="text-sm text-ink-2">카드와 복습 기록이 이 기기에서 지워집니다. 되돌릴 수 없습니다.</p>
       </Dialog>
     </div>
   );
@@ -336,11 +336,11 @@ function DraftDialog({ open, onClose, courseId, lectures, existing }: { open: bo
     <Dialog
       open={open}
       onClose={onClose}
-      title="Draft cards from your slides"
+      title="슬라이드로 카드 초안 만들기"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button
             variant="primary"
@@ -359,21 +359,21 @@ function DraftDialog({ open, onClose, courseId, lectures, existing }: { open: bo
                     added += 1;
                   }
                 }
-                toast.show(added ? `${added} draft card${added === 1 ? '' : 's'} added for your review.` : 'Nothing new was found. The scanner only recognises “bold term: explanation” lines and tables.', added ? 'ok' : 'info');
+                toast.show(added ? `검토할 초안 카드 ${added}장을 추가했습니다.` : '새로 찾은 것이 없습니다. 스캐너는 “굵은 용어: 설명” 형식의 줄과 표만 알아봅니다.', added ? 'ok' : 'info');
                 onClose();
               } finally {
                 setBusy(false);
               }
             }}
           >
-            Scan slides
+            슬라이드 스캔
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3 text-sm">
         <p className="text-ink-2">
-          This is a simple rule-based scanner, not AI. It looks for a bold term followed by its explanation (for example “<strong>Decidable language</strong>: a language for which…”) and for tables. Drafts are never studied until you approve them.
+          AI가 아닌 간단한 규칙 기반 스캐너입니다. 굵은 용어 뒤에 설명이 오는 줄(예: “<strong>결정 가능 언어</strong>: 어떤 튜링 기계가…”)과 표를 찾습니다. 초안은 승인하기 전까지 학습에 쓰이지 않습니다.
         </p>
         <ul className="max-h-52 overflow-y-auto rounded-[var(--radius-control)] border border-rule">
           {lectures.map((l) => (

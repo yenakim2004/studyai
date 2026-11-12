@@ -5,7 +5,7 @@ import { getDb } from '@/core/db/db';
 import { useAllLectures, useCourses } from '@/app/data';
 import { useTheme, type ThemeChoice } from '@/app/theme';
 import { useToast } from '@/app/toast';
-import { OwnerPanel } from '@/ui/ai/OwnerPanel';
+import { ChatGptPanel } from '@/ui/ai/ChatGptPanel';
 import { Button, Callout, Dialog, formatBytes, Spinner } from '@/ui/primitives';
 
 const db = getDb();
@@ -32,17 +32,17 @@ export function SettingsPage() {
 
   const doExport = async () => {
     try {
-      setExporting('Starting');
-      const blob = await exportBackup(db, (p) => setExporting(`${p.label} (${p.done} of ${p.total})`), 'studyai 0.1');
+      setExporting('시작하는 중');
+      const blob = await exportBackup(db, (p) => setExporting(`${p.label} (${p.done}/${p.total})`), 'studyai 0.1');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `studyai-backup-${new Date().toISOString().slice(0, 10)}.studyai.zip`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      toast.show(`Backup saved (${formatBytes(blob.size)}). Keep it somewhere safe, such as cloud storage you already use.`, 'ok');
+      toast.show(`백업을 저장했습니다(${formatBytes(blob.size)}). 이미 쓰는 클라우드 저장소처럼 안전한 곳에 보관하세요.`, 'ok');
     } catch (err) {
-      toast.show(err instanceof Error ? `Backup failed: ${err.message}` : 'Backup failed.', 'error');
+      toast.show(err instanceof Error ? `백업하지 못했습니다: ${err.message}` : '백업하지 못했습니다.', 'error');
     } finally {
       setExporting(undefined);
     }
@@ -57,7 +57,7 @@ export function SettingsPage() {
       setPreview({ backup: readBackup(bytes), name: file.name });
       setMode('merge');
     } catch (err) {
-      toast.show(err instanceof BackupError ? err.message : 'That file could not be read.', 'error');
+      toast.show(err instanceof BackupError ? err.message : '그 파일을 읽지 못했습니다.', 'error');
     } finally {
       setReading(false);
     }
@@ -68,33 +68,33 @@ export function SettingsPage() {
     setApplying(true);
     try {
       const s = await applyBackup(db, preview.backup, mode);
-      toast.show(`Restored: ${s.lecturesAdded + s.lecturesReplaced} lectures (${s.slides} slides), ${s.coursesAdded + s.coursesUpdated} courses${s.lecturesSkipped ? `, ${s.lecturesSkipped} unchanged` : ''}.`, 'ok');
+      toast.show(`복원했습니다: 강의 ${s.lecturesAdded + s.lecturesReplaced}개(슬라이드 ${s.slides}장), 과목 ${s.coursesAdded + s.coursesUpdated}개${s.lecturesSkipped ? `, 바뀌지 않은 강의 ${s.lecturesSkipped}개` : ''}.`, 'ok');
       setPreview(undefined);
     } catch (err) {
-      toast.show(err instanceof Error ? `Restore failed: ${err.message}` : 'Restore failed.', 'error');
+      toast.show(err instanceof Error ? `복원하지 못했습니다: ${err.message}` : '복원하지 못했습니다.', 'error');
     } finally {
       setApplying(false);
     }
   };
 
   const themes: [ThemeChoice, string][] = [
-    ['system', 'Match my device'],
-    ['light', 'Light'],
-    ['dark', 'Dark'],
+    ['system', '기기 설정 따르기'],
+    ['light', '밝게'],
+    ['dark', '어둡게'],
   ];
   const slideTotal = (lectures ?? []).reduce((n, l) => n + l.slideCount, 0);
   const b = preview?.backup;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-8 md:py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Settings and backup</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">설정과 백업</h1>
 
       <section className="mt-8" aria-labelledby="appearance-h">
         <h2 id="appearance-h" className="text-lg font-semibold">
-          Appearance
+          화면
         </h2>
         <fieldset className="mt-3">
-          <legend className="sr-only">Theme</legend>
+          <legend className="sr-only">테마</legend>
           <div className="inline-flex overflow-hidden rounded-[var(--radius-control)] border border-rule-strong">
             {themes.map(([id, label]) => (
               <label key={id} className={`inline-flex min-h-10 cursor-pointer items-center px-3.5 text-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${choice === id ? 'bg-accent-soft font-medium text-ink' : 'bg-surface text-ink-2 hover:bg-sunken'}`}>
@@ -108,24 +108,24 @@ export function SettingsPage() {
 
       <section className="mt-10" aria-labelledby="backup-h">
         <h2 id="backup-h" className="text-lg font-semibold">
-          Backup and restore
+          백업과 복원
         </h2>
         <p className="mt-1 max-w-prose text-sm text-ink-2">
-          Your library lives only in this browser. Clearing site data, switching browser or device, or a reinstall removes it. A backup is one file containing your courses, lectures, slides, images and the original PowerPoint files.
+          라이브러리는 이 브라우저에만 있습니다. 사이트 데이터를 지우거나, 브라우저나 기기를 바꾸거나, 다시 설치하면 사라집니다. 백업은 과목, 강의, 슬라이드, 이미지, 원본 강의 파일을 담은 파일 하나입니다.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button variant="primary" onClick={() => void doExport()} disabled={!!exporting || (courses?.length ?? 0) === 0}>
-            <Download className="size-4" aria-hidden /> Export backup
+            <Download className="size-4" aria-hidden /> 백업 내보내기
           </Button>
           <Button onClick={() => fileInput.current?.click()} disabled={reading}>
-            <Upload className="size-4" aria-hidden /> Restore from backup
+            <Upload className="size-4" aria-hidden /> 백업에서 복원
           </Button>
           <input
             ref={fileInput}
             type="file"
             accept=".zip,.studyai.zip,application/zip"
             className="sr-only"
-            aria-label="Choose a backup file"
+            aria-label="백업 파일 고르기"
             tabIndex={-1}
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -136,52 +136,52 @@ export function SettingsPage() {
         </div>
         {exporting && (
           <p className="mt-3">
-            <Spinner label={`Exporting: ${exporting}`} />
+            <Spinner label={`내보내는 중: ${exporting}`} />
           </p>
         )}
         {reading && (
           <p className="mt-3">
-            <Spinner label="Checking the backup" />
+            <Spinner label="백업을 확인하는 중" />
           </p>
         )}
       </section>
 
       <section className="mt-10" aria-labelledby="storage-h">
         <h2 id="storage-h" className="text-lg font-semibold">
-          This device
+          이 기기
         </h2>
         <dl className="mt-3 grid gap-px overflow-hidden rounded-[var(--radius-panel)] border border-rule bg-rule text-sm sm:grid-cols-3">
           <div className="bg-surface px-4 py-3">
-            <dt className="text-[13px] text-ink-3">Courses and lectures</dt>
+            <dt className="text-[13px] text-ink-3">과목과 강의</dt>
             <dd className="text-lg font-semibold">
-              {courses?.length ?? 0} and {lectures?.length ?? 0}
+              과목 {courses?.length ?? 0}개, 강의 {lectures?.length ?? 0}개
             </dd>
           </div>
           <div className="bg-surface px-4 py-3">
-            <dt className="text-[13px] text-ink-3">Slides stored</dt>
+            <dt className="text-[13px] text-ink-3">저장된 슬라이드</dt>
             <dd className="text-lg font-semibold">{slideTotal}</dd>
           </div>
           <div className="bg-surface px-4 py-3">
-            <dt className="text-[13px] text-ink-3">Space used</dt>
-            <dd className="text-lg font-semibold">{storage.usage !== undefined ? formatBytes(storage.usage) : 'Unknown'}</dd>
+            <dt className="text-[13px] text-ink-3">사용 공간</dt>
+            <dd className="text-lg font-semibold">{storage.usage !== undefined ? formatBytes(storage.usage) : '알 수 없음'}</dd>
           </div>
         </dl>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-2">
           <HardDrive className="size-4" aria-hidden />
           {storage.persisted ? (
-            <span>The browser has promised not to clear this data automatically.</span>
+            <span>브라우저가 이 데이터를 자동으로 지우지 않기로 했습니다.</span>
           ) : (
             <>
-              <span>The browser may clear this data if the device runs low on space.</span>
+              <span>기기 공간이 부족하면 브라우저가 이 데이터를 지울 수 있습니다.</span>
               <Button
                 size="sm"
                 onClick={async () => {
                   const ok = await navigator.storage?.persist?.();
-                  toast.show(ok ? 'Protected from automatic cleanup.' : 'The browser declined. Keep regular backups instead.', ok ? 'ok' : 'info');
+                  toast.show(ok ? '자동 정리에서 보호됩니다.' : '브라우저가 거절했습니다. 대신 정기적으로 백업하세요.', ok ? 'ok' : 'info');
                   void refreshStorage();
                 }}
               >
-                Ask the browser to keep it
+                브라우저에 보관 요청
               </Button>
             </>
           )}
@@ -190,24 +190,24 @@ export function SettingsPage() {
 
       <section className="mt-10" aria-labelledby="ai-h">
         <h2 id="ai-h" className="text-lg font-semibold">
-          AI tutor (Gemini free tier)
+          AI 학습 도우미
         </h2>
         <p className="mt-1 max-w-prose text-sm text-ink-2">
-          Optional and private. Everything else in the app works without it, and keeps working if AI is switched off, paused or out of budget. AI never runs on its own: it only sends something when you press send, and it shows you exactly what first.
+          선택 기능입니다. 앱의 다른 기능은 AI 없이도 모두 되고, AI가 꺼지거나 멈춰도 계속 됩니다. AI는 스스로 움직이지 않습니다. 보내기를 눌렀을 때만 보내며, 무엇을 보내는지 먼저 정확히 보여 줍니다.
         </p>
         <div className="mt-4">
-          <OwnerPanel />
+          <ChatGptPanel />
         </div>
       </section>
 
       <section className="mt-10" aria-labelledby="privacy-h">
         <h2 id="privacy-h" className="flex items-center gap-2 text-lg font-semibold">
-          <ShieldCheck className="size-5 text-ok" aria-hidden /> Privacy
+          <ShieldCheck className="size-5 text-ok" aria-hidden /> 개인정보
         </h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
-          <li>PowerPoint files are read in your browser and are never uploaded.</li>
-          <li>There is no account, no analytics and no tracking. Fonts are bundled with the app.</li>
-          <li>Only a backup file you create leaves this browser.</li>
+          <li>PowerPoint와 PDF 파일은 브라우저 안에서 읽고 업로드하지 않습니다.</li>
+          <li>계정, 분석, 추적이 없습니다. 외부 글꼴이나 외부 서비스에서 아무것도 불러오지 않습니다.</li>
+          <li>내가 만든 백업 파일만 이 브라우저를 벗어납니다.</li>
         </ul>
       </section>
 
@@ -215,14 +215,14 @@ export function SettingsPage() {
         open={!!preview}
         onClose={() => !applying && setPreview(undefined)}
         wide
-        title="Restore from backup"
+        title="백업에서 복원"
         footer={
           <>
             <Button variant="ghost" onClick={() => setPreview(undefined)} disabled={applying}>
-              Cancel
+              취소
             </Button>
             <Button variant={mode === 'replace' ? 'danger' : 'primary'} onClick={() => void doRestore()} disabled={applying}>
-              {applying ? 'Restoring' : mode === 'replace' ? 'Replace my library' : 'Merge into my library'}
+              {applying ? '복원하는 중' : mode === 'replace' ? '내 라이브러리 바꾸기' : '내 라이브러리에 합치기'}
             </Button>
           </>
         }
@@ -230,15 +230,15 @@ export function SettingsPage() {
         {b && preview && (
           <div className="flex flex-col gap-4 text-sm">
             <p>
-              <span className="font-medium">{preview.name}</span> was made {new Date(b.manifest.createdAt).toLocaleString()}. It was checked and is safe to read.
+              <span className="font-medium">{preview.name}</span>은(는) {new Date(b.manifest.createdAt).toLocaleString('ko-KR')}에 만든 백업입니다. 확인을 마쳤고 안전하게 읽을 수 있습니다.
             </p>
             <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-panel)] border border-rule bg-rule sm:grid-cols-4">
               {(
                 [
-                  ['Courses', b.manifest.counts.courses],
-                  ['Lectures', b.manifest.counts.lectures],
-                  ['Slides', b.manifest.counts.slides],
-                  ['Images', b.manifest.counts.media],
+                  ['과목', b.manifest.counts.courses],
+                  ['강의', b.manifest.counts.lectures],
+                  ['슬라이드', b.manifest.counts.slides],
+                  ['이미지', b.manifest.counts.media],
                 ] as const
               ).map(([k, v]) => (
                 <div key={k} className="bg-surface px-3 py-2">
@@ -248,7 +248,7 @@ export function SettingsPage() {
               ))}
             </dl>
             {b.warnings.length > 0 && (
-              <Callout tone="warn" title="Notes about this backup">
+              <Callout tone="warn" title="이 백업에 대한 참고">
                 <ul className="list-disc space-y-0.5 pl-4">
                   {b.warnings.slice(0, 6).map((w, i) => (
                     <li key={i}>{w}</li>
@@ -257,19 +257,19 @@ export function SettingsPage() {
               </Callout>
             )}
             <fieldset className="flex flex-col gap-2">
-              <legend className="font-medium">How should it be restored?</legend>
+              <legend className="font-medium">어떻게 복원할까요?</legend>
               <label className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-control)] border border-rule p-3 has-[:checked]:border-accent has-[:checked]:bg-accent-soft">
                 <input type="radio" name="mode" checked={mode === 'merge'} onChange={() => setMode('merge')} className="mt-1 accent-[var(--accent)]" />
                 <span>
-                  <span className="block font-medium">Merge (recommended)</span>
-                  <span className="text-ink-2">Adds what is missing and updates lectures that are newer in the backup. Nothing is deleted.</span>
+                  <span className="block font-medium">합치기(권장)</span>
+                  <span className="text-ink-2">없는 것을 더하고, 백업에 더 새 버전이 있는 강의를 업데이트합니다. 아무것도 지우지 않습니다.</span>
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-control)] border border-rule p-3 has-[:checked]:border-bad has-[:checked]:bg-bad-soft">
                 <input type="radio" name="mode" checked={mode === 'replace'} onChange={() => setMode('replace')} className="mt-1 accent-[var(--bad)]" />
                 <span>
-                  <span className="block font-medium">Replace everything</span>
-                  <span className="text-ink-2">Deletes your current library on this device first, then restores the backup. Export a backup before choosing this.</span>
+                  <span className="block font-medium">전부 바꾸기</span>
+                  <span className="text-ink-2">이 기기의 현재 라이브러리를 먼저 지운 뒤 백업을 복원합니다. 고르기 전에 백업을 내보내세요.</span>
                 </span>
               </label>
             </fieldset>

@@ -69,16 +69,18 @@ describe('backup export / import', () => {
   it('never carries the consent to send text to an AI service, even in a doctored backup', async () => {
     await seed(db);
     await db.settings.put({ key: 'aiConsentAt', value: '2026-10-16T10:00:00.000Z' });
+    await db.settings.put({ key: 'aiConsentAt:chatgpt', value: '2026-11-12' });
     const zipBytes = await exportBytes(db);
     const files = unzipSync(zipBytes);
     expect(JSON.parse(strFromU8(files['data/settings.json']!))).toEqual([{ key: 'theme', value: 'dark' }]); // not exported
     // someone adds a pre-made consent to the backup file: it is ignored on restore
-    const doctored = { ...files, 'data/settings.json': strToU8(JSON.stringify([{ key: 'theme', value: 'dark' }, { key: 'aiConsentAt', value: '2026-10-16T10:00:00.000Z' }])) };
+    const doctored = { ...files, 'data/settings.json': strToU8(JSON.stringify([{ key: 'theme', value: 'dark' }, { key: 'aiConsentAt', value: '2026-10-16T10:00:00.000Z' }, { key: 'aiConsentAt:chatgpt', value: '2026-11-12' }])) };
     const parsed = readBackup(zipSync(doctored));
     expect(parsed.settings).toEqual([{ key: 'theme', value: 'dark' }]);
     const fresh = new StudyDB(`bk-consent-${n++}`);
     await applyBackup(fresh, parsed, 'replace');
     expect(await fresh.settings.get('aiConsentAt')).toBeUndefined();
+    expect(await fresh.settings.get('aiConsentAt:chatgpt')).toBeUndefined();
   });
 
   it('survives an empty library', async () => {
@@ -140,9 +142,9 @@ describe('backup validation (untrusted input)', () => {
   };
 
   it('rejects things that are not backups', () => {
-    expectRejected(strToU8('definitely not a zip file, but long enough to look at'), /not a readable StudyAI backup/);
-    expectRejected(zipSync({ 'hello.txt': strToU8('hi') }), /missing "manifest.json"/);
-    expectRejected(zipSync({ 'manifest.json': strToU8('{ broken json') }), /damaged/);
+    expectRejected(strToU8('definitely not a zip file, but long enough to look at'), /읽을 수 있는 StudyAI 백업이 아닙니다/);
+    expectRejected(zipSync({ 'hello.txt': strToU8('hi') }), /백업에 "manifest.json"이\(가\) 없습니다/);
+    expectRejected(zipSync({ 'manifest.json': strToU8('{ broken json') }), /손상되었습니다/);
   });
 
   it('rejects backups from a newer format version', async () => {
@@ -151,7 +153,7 @@ describe('backup validation (untrusted input)', () => {
       m.version = BACKUP_VERSION + 1;
       f['manifest.json'] = strToU8(JSON.stringify(m));
     });
-    expectRejected(bytes, /newer version/);
+    expectRejected(bytes, /더 새로운 버전의 StudyAI로 만든 백업입니다/);
   });
 
   it('rejects structurally invalid records', async () => {
@@ -160,7 +162,7 @@ describe('backup validation (untrusted input)', () => {
       c[0].color = 999;
       f['data/courses.json'] = strToU8(JSON.stringify(c));
     });
-    expectRejected(bytes, /invalid courses/);
+    expectRejected(bytes, /백업의 과목 항목이 올바르지 않습니다/);
   });
 
   it('rejects ids that could escape the archive layout', async () => {
@@ -169,7 +171,7 @@ describe('backup validation (untrusted input)', () => {
       c[0].id = '../../evil';
       f['data/courses.json'] = strToU8(JSON.stringify(c));
     });
-    expectRejected(bytes, /invalid courses/);
+    expectRejected(bytes, /백업의 과목 항목이 올바르지 않습니다/);
   });
 
   it('rejects slide content that could inject CSS or script-bearing links', async () => {
@@ -184,13 +186,13 @@ describe('backup validation (untrusted input)', () => {
       await mutate((s) => {
         s.elements[0].fill = 'red; background:url(https://evil.example/x)';
       }),
-      /invalid slides/,
+      /의 슬라이드 항목이 올바르지 않습니다/,
     );
     expectRejected(
       await mutate((s) => {
         s.elements[1].paragraphs[0].inlines[0].link = 'javascript:alert(1)';
       }),
-      /invalid slides/,
+      /의 슬라이드 항목이 올바르지 않습니다/,
     );
   });
 
@@ -199,13 +201,13 @@ describe('backup validation (untrusted input)', () => {
       await rewrite((f, { lectureId }) => {
         delete f[`data/slides/${lectureId}.json`];
       }),
-      /missing "data\/slides/,
+      /백업에 "data\/slides/,
     );
     expectRejected(
       await rewrite((f, { lectureId }) => {
         delete f[`media/${lectureId}/0.bin`];
       }),
-      /image of .* is missing/,
+      /의 이미지가 백업에 없습니다/,
     );
     expectRejected(
       await rewrite((f) => {
@@ -213,7 +215,7 @@ describe('backup validation (untrusted input)', () => {
         l[0].courseId = 'ghost';
         f['data/lectures.json'] = strToU8(JSON.stringify(l));
       }),
-      /course that is not in the backup/,
+      /백업에 없는 과목을 가리킵니다/,
     );
   });
 
@@ -221,7 +223,7 @@ describe('backup validation (untrusted input)', () => {
     const bytes = await rewrite((f, { lectureId }) => {
       delete f[`files/${lectureId}.pptx`];
     });
-    expect(readBackup(bytes).warnings.join(' ')).toMatch(/original PowerPoint file/);
+    expect(readBackup(bytes).warnings.join(' ')).toMatch(/원본 파일이 백업에 없습니다/);
   });
 
   it('applies the same decompression-bomb protection as PPTX import', () => {

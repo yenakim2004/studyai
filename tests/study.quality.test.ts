@@ -112,7 +112,7 @@ describe('the model answer', () => {
     const missing = q({ modelAnswer: 'Encryption protects the data in transit so that a listener cannot read it. A firewall filters the traffic using rules and blocks untrusted addresses.' });
     const issues = assessQuestions([missing], ctx).issues.filter((i) => i.code === 'ANSWER_MISSES_POINT');
     expect(issues).toHaveLength(1);
-    expect(issues[0]!.message).toContain('marking point 3');
+    expect(issues[0]!.message).toContain('채점 기준 3(');
     // keywords given with the point count as evidence
     const viaKeywords = q({ modelAnswer: missing.modelAnswer + ' Token.', rubric: [q().rubric[0]!, q().rubric[1]!, { ...q().rubric[2]!, keywords: ['token'] }] });
     expect(has([viaKeywords], 'ANSWER_MISSES_POINT')).toBe(false);
@@ -261,11 +261,11 @@ describe('marking points answer what the question asks (failures found with the 
   it('finds the sixth mark that the question never asked for (a six-mark scenario that asks for five things)', () => {
     const found = alignment([segments()]);
     expect(found.map((i) => i.code)).toEqual(['ASK_COUNT']);
-    expect(found[0]!.message).toMatch(/asks for 2 items in "describe the growth direction.*but 3 marking points answer it: the extra marks are not asked for/);
+    expect(found[0]!.message).toMatch(/"describe the growth direction.*에서 2개를 요구하지만 이에 답하는 채점 기준은 3개입니다\. 남는 점수는 문제에서 요구하지 않은 것입니다/);
     // pointing the padded mark at an ask that does not exist does not hide it either
     const lost = alignment([segments({ rubric: pts([...SEGMENT_POINTS, PADDED], [1, 1, 1, 2, 2, 3]) })]);
     expect(lost.map((i) => i.code)).toEqual(['POINT_NOT_ASKED']);
-    expect(lost[0]!.message).toMatch(/Marking point 6 \("Memory segments are separated/);
+    expect(lost[0]!.message).toMatch(/채점 기준 6\("Memory segments are separated/);
     // a point that does not say which ask it answers is reported too, even when the counts happen to add up
     const unsaid = segments({ marks: 5, rubric: pts(SEGMENT_POINTS, [1, 1, 1, 2, 2]).map((p, i) => (i === 4 ? { text: p.text, marks: 1 } : p)) });
     expect(alignment([unsaid]).map((i) => i.code)).toEqual(['ASK_COUNT', 'POINT_NOT_ASKED']);
@@ -285,12 +285,12 @@ describe('marking points answer what the question asks (failures found with the 
     expect(alignment([invented]).map((i) => i.code)).toEqual(['ASK_NOT_IN_QUESTION']);
     const wrongNumber = segments({ asks: [{ quote: 'identify which specific memory segments will store each of these three types of data', count: 4 }, { quote: 'describe the growth direction for the stack and heap segments', count: 2 }], rubric: pts([...SEGMENT_POINTS, PADDED], [1, 1, 1, 1, 2, 2]), marks: 6 });
     expect(alignment([wrongNumber]).map((i) => i.code)).toEqual(['ASK_COUNT']);
-    expect(alignment([wrongNumber])[0]!.message).toMatch(/says 3 in .*but that ask is marked as wanting 4/);
+    expect(alignment([wrongNumber])[0]!.message).toMatch(/에서 3개를 말하지만, 이 요구 사항은 4개를 원한다고 표시되어 있습니다/);
   });
 
   it('finds something the question asks for that no marking point rewards', () => {
     const unrewarded = segments({ marks: 3, rubric: pts(SEGMENT_POINTS.slice(0, 3), [1, 1, 1]) });
-    expect(alignment([unrewarded]).map((i) => i.message)).toEqual([expect.stringMatching(/asks for "describe the growth direction.*but no marking point rewards it/)]);
+    expect(alignment([unrewarded]).map((i) => i.message)).toEqual([expect.stringMatching(/문제는 "describe the growth direction.*을\(를\) 요구하지만 이에 점수를 주는 채점 기준이 없습니다/)]);
   });
 
   it('cannot see a point that is asked for in words but answers something else; that needs the AI check (see the audit tests)', () => {
@@ -364,7 +364,7 @@ describe('two more failures from the second real-model run', () => {
       sources: [],
     };
     const found = assessQuestions([mechanism], ctx).issues.filter((i) => i.code === 'TYPE_MISMATCH');
-    expect(found.map((i) => i.message)).toEqual(['An attack question should ask what weakens or stops the attack (a defence or countermeasure), not only how it works.']);
+    expect(found.map((i) => i.message)).toEqual(['공격 문제는 공격이 어떻게 동작하는지만이 아니라 무엇이 공격을 약화하거나 막는지(방어나 대응책)를 물어야 합니다.']);
     const withDefence = { ...mechanism, prompt: mechanism.prompt.replace('change the program flow.', 'change the program flow, and say which defence stops it.') };
     expect(assessQuestions([withDefence], ctx).issues.filter((i) => i.code === 'TYPE_MISMATCH')).toEqual([]);
     expect(assessQuestions([{ ...mechanism, type: 'short' }], ctx).issues.filter((i) => i.code === 'TYPE_MISMATCH')).toEqual([]); // only an attack question is held to it
@@ -384,5 +384,39 @@ describe('two more failures from the second real-model run', () => {
       sources: [],
     };
     expect(assessQuestions([q], ctx).issues.filter((i) => i.code === 'POINTS_OVERLAP')).toEqual([]);
+  });
+});
+
+describe('Korean questions are held to the same rules', () => {
+  const ko = (over: Partial<QualityQuestion> = {}): QualityQuestion =>
+    q({
+      type: 'short',
+      prompt: '방화벽이 하는 일을 두 가지 쓰시오.',
+      marks: 2,
+      difficulty: 2,
+      rubric: [
+        { text: '방화벽은 규칙으로 트래픽을 걸러 낸다', marks: 1, ask: 1 },
+        { text: '방화벽은 차단한 시도를 모두 기록한다', marks: 1, ask: 1 },
+      ],
+      asks: [{ quote: '두 가지 쓰시오', count: 2 }],
+      modelAnswer: '방화벽은 규칙으로 트래픽을 걸러 내고, 차단한 시도를 모두 기록합니다.',
+      sources: [{ lectureId: 'L', slide: 1 }],
+      ...over,
+    });
+
+  it('does not call Korean marking points "not on the slides" just because the cited slide is English', () => {
+    expect(codes([ko()])).not.toContain('POINT_NOT_ON_SLIDES');
+    expect(codes([ko()])).toEqual([]);
+  });
+
+  it('finds a Korean count that disagrees with the ask, and a Korean "any two of" point', () => {
+    expect(assessQuestions([ko({ asks: [{ quote: '세 가지 쓰시오', count: 2 }] })], ctx).issues.map((i) => i.code)).toContain('ASK_COUNT');
+    expect(codes([ko({ rubric: [{ text: '다음 중 두 가지를 쓴다: 걸러 내기, 기록', marks: 2, ask: 1 }] })])).toContain('POINTS_NOT_INDEPENDENT');
+    expect(codes([ko({ asks: [{ quote: '한 번에 두 가지 쓰시오', count: 2 }] })])).not.toContain('ASK_COUNT'); // "한 번에" is not a count
+  });
+
+  it('reads a Korean word with different particles as one word, so a repeated point is found', () => {
+    const twice = ko({ rubric: [{ text: '방화벽은 트래픽을 규칙으로 걸러 낸다', marks: 1, ask: 1 }, { text: '방화벽이 트래픽을 규칙으로 걸러 낸다', marks: 1, ask: 1 }] });
+    expect(codes([twice])).toContain('POINTS_OVERLAP');
   });
 });

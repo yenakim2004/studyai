@@ -6,7 +6,7 @@ import { getDb } from '@/core/db/db';
 import type { QuestionRow } from '@/core/study/types';
 import { QUESTION_TYPE_LABEL } from '@/core/study/types';
 import { LazyMarkdown } from '@/ui/LazyMarkdown';
-import { Solution } from '@/ui/study/exam-ui';
+import { optionText, Solution } from '@/ui/study/exam-ui';
 import { Button, Spinner } from '@/ui/primitives';
 import { NotFound } from './NotFound';
 
@@ -21,7 +21,7 @@ export function ExamPaperPage() {
   const [scheme, setScheme] = useState(false);
   const questions = useMemo(() => (raw ?? []).filter((q): q is QuestionRow => !!q), [raw]);
 
-  if (exam === null) return <NotFound what="exam" />;
+  if (exam === null) return <NotFound what="시험이" />;
   if (!exam || !raw || !course) {
     return (
       <div className="p-6">
@@ -35,15 +35,15 @@ export function ExamPaperPage() {
     <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6 print:max-w-none print:p-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link to={`/course/${course.id}/practice`} className="text-sm text-ink-2 hover:text-ink">
-          Back to practice
+          연습으로 돌아가기
         </Link>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={scheme} onChange={(e) => setScheme(e.target.checked)} />
-            Include marking scheme
+            채점 기준 포함
           </label>
           <Button variant="primary" onClick={() => window.print()}>
-            <Printer className="size-4" aria-hidden /> Print or save as PDF
+            <Printer className="size-4" aria-hidden /> 인쇄 또는 PDF로 저장
           </Button>
         </div>
       </div>
@@ -53,10 +53,10 @@ export function ExamPaperPage() {
           <p className="text-sm text-ink-3">{course.code ? `${course.code}, ` : ''}{course.name}</p>
           <h1 className="text-2xl font-semibold">{exam.config.title}</h1>
           <p className="mt-1 text-sm text-ink-2">
-            Total marks: {total}
-            {exam.config.minutes ? `. Time allowed: ${exam.config.minutes} minutes` : ''}. Answer all questions.
+            총점 {total}점
+            {exam.config.minutes ? `, 제한 시간 ${exam.config.minutes}분` : ''}. 모든 문제에 답하세요.
           </p>
-          {scheme && <p className="mt-1 text-sm font-medium">Marking scheme included.</p>}
+          {scheme && <p className="mt-1 text-sm font-medium">채점 기준이 포함되어 있습니다.</p>}
         </header>
         <ol className="mt-5 flex flex-col gap-7">
           {questions.map((q, i) => (
@@ -65,7 +65,7 @@ export function ExamPaperPage() {
                 <p className="font-semibold">
                   {i + 1}. <span className="text-sm font-normal text-ink-3">{QUESTION_TYPE_LABEL[q.type]}</span>
                 </p>
-                <p className="shrink-0 text-sm">[{q.marks} mark{q.marks === 1 ? '' : 's'}]</p>
+                <p className="shrink-0 text-sm">[{q.marks}점]</p>
               </div>
               <div className="mt-1">
                 <LazyMarkdown>{q.prompt}</LazyMarkdown>
@@ -76,7 +76,7 @@ export function ExamPaperPage() {
                     <li key={o.id} className="flex gap-3">
                       <span className="mt-1 inline-block size-4 shrink-0 rounded-sm border border-ink-2" aria-hidden />
                       <span className="min-w-0">
-                        <LazyMarkdown>{o.text}</LazyMarkdown>
+                        <LazyMarkdown>{optionText(q, o)}</LazyMarkdown>
                       </span>
                     </li>
                   ))}

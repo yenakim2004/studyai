@@ -1,69 +1,65 @@
-name: Bug report
-description: Something in StudyAI does not work as documented
+name: 오류 제보
+description: StudyAI가 안내된 대로 작동하지 않습니다.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time. StudyAI is a small project kept by one person, so reports are answered when time allows.
-
-        **Security problems are not issues.** If this could let someone read data, spend money or use a deployment that is not theirs, stop here and report it privately: see [SECURITY.md](https://github.com/zuhairhalawa/studyai/blob/main/SECURITY.md).
-
-        **Do not attach lecture slides, study packs, exports, API keys or anything personal.** If the failing input is private, reproduce it with an invented deck (the tests build them with `tests/fixtures/pptx-builder.ts`).
+        보안 취약점은 공개 이슈 대신 [보안 안내](https://github.com/yenakim2004/studyai/blob/main/SECURITY.md)를 따라 주세요.
+        실제 강의 자료, 학습 내보내기 파일, 인증 정보나 개인정보는 첨부하지 마세요. 직접 만든 예제 파일로 재현해 주세요.
   - type: dropdown
     id: area
     attributes:
-      label: Where does it happen?
+      label: 문제가 발생한 기능
       options:
-        - Study app (lectures, search, flashcards, exams)
-        - PowerPoint import and the extraction report
-        - Optional AI tutor / Worker
-        - Study packs and the command-line tool
-        - Backup and restore
-        - Documentation
-        - Something else
+        - 학습 화면·검색·암기 카드·시험
+        - PowerPoint·PDF 가져오기
+        - ChatGPT 연결·AI 학습 도우미
+        - 학습 팩·명령줄 도구
+        - 백업·복원
+        - 문서
+        - 기타
     validations:
       required: true
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened?
-      description: Say what you did and what you saw. Quote any error message exactly.
+      label: 어떤 문제가 발생했나요?
+      description: 실행한 작업과 실제 결과를 적고 오류 문구를 그대로 포함해 주세요.
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: What did you expect instead?
+      label: 기대한 결과
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
-      description: The smallest set of steps, using invented content only.
+      label: 재현 방법
+      description: 개인 자료 없이 문제를 재현하는 최소 단계를 적어 주세요.
       placeholder: |
-        1. Create a course
-        2. Import a deck with ...
-        3. Open ...
+        1. 과목을 만듭니다.
+        2. 예제 파일을 가져옵니다.
+        3. 문제가 발생한 화면을 엽니다.
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Commit
-      description: The commit you are running (`git rev-parse --short HEAD`). The project is pre-1.0, so `main` is the supported version.
+      label: 실행 중인 커밋
+      description: git rev-parse --short HEAD의 결과를 적어 주세요.
   - type: input
     id: environment
     attributes:
-      label: Browser, operating system and (for development) Node and pnpm versions
-      placeholder: Chrome 130 on Windows 11, Node 24, pnpm 11
+      label: 브라우저·운영체제·Node.js·pnpm 버전
   - type: checkboxes
     id: confirm
     attributes:
-      label: Before you submit
+      label: 제출 전 확인
       options:
-        - label: This is not a security vulnerability.
+        - label: 보안 취약점 제보가 아닙니다.
           required: true
-        - label: I have not included real lecture material, keys, or personal data.
+        - label: 실제 강의 자료, 인증 정보와 개인정보를 포함하지 않았습니다.
           required: true

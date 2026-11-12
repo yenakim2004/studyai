@@ -3,7 +3,7 @@ import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { demoBase, injectDemoHead } from './config/demo-html.ts';
+import { demoBase, injectDemoHead, injectSitesHead } from './config/demo-html.ts';
 import { renderHeadersFile, SECURITY_HEADERS } from './config/headers.ts';
 
 /** Emits dist/_headers so Cloudflare serves the same CSP/security headers the preview server used in tests. */
@@ -16,20 +16,16 @@ function securityHeadersFile(): Plugin {
   };
 }
 
-/**
- * The static public demo (`vite build --mode demo`, docs/DEMO.md): the policy goes into the page itself because GitHub Pages sends
- * no headers, and 404.html is a copy of the page so a reload on a deep link still opens the app. No `_headers` file is written.
- */
-function demoSite(): Plugin {
+function staticSite(demo: boolean): Plugin {
   return {
-    name: 'studyai-demo-site',
+    name: 'studyai-static-site',
     apply: 'build',
-    transformIndexHtml: { order: 'pre', handler: injectDemoHead },
+    transformIndexHtml: { order: 'pre', handler: demo ? injectDemoHead : injectSitesHead },
     generateBundle: {
       order: 'post',
       handler(_options, bundle) {
         const page = bundle['index.html'];
-        if (page?.type !== 'asset') throw new Error('The demo build produced no index.html.');
+        if (page?.type !== 'asset') throw new Error('정적 사이트 빌드에서 index.html을 생성하지 못했습니다.');
         this.emitFile({ type: 'asset', fileName: '404.html', source: page.source });
       },
     },
@@ -40,13 +36,14 @@ const src = fileURLToPath(new URL('./src', import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const demo = mode === 'demo';
+  const sites = mode === 'sites';
+  const hosted = demo || sites;
   return {
     // The demo lives under a sub-path (https://<owner>.github.io/studyai/); the regular build is served from the root.
     base: demo ? demoBase() : '/',
-    plugins: [react(), tailwindcss(), demo ? demoSite() : securityHeadersFile()],
+    plugins: [react(), tailwindcss(), ...(hosted ? [staticSite(demo)] : []), ...(!demo ? [securityHeadersFile()] : [])],
     resolve: {
-      // In the demo the AI client is swapped for a stub that cannot make a request, so the demo bundle holds no code that calls a server.
-      alias: demo
+      alias: hosted
         ? [
             { find: /^@\/app\/ai$/, replacement: fileURLToPath(new URL('./src/app/ai.demo.ts', import.meta.url)) },
             { find: '@', replacement: src },
@@ -63,9 +60,9 @@ export default defineConfig(({ mode }) => {
     // The library lives in IndexedDB, which the browser scopes to the exact address. If port 5173 were busy, Vite would
     // quietly move to 5174 and the student would see an empty library; stop with an error instead (`--port` overrides).
     server: { port: 5173, strictPort: true },
-    // `vite preview` serves the production build with the production policy. The demo carries its policy in the page, so its
+    // `vite preview` serves the production build with the production policy. Static builds carry their policy in the page, so their
     // preview sends no headers: a test then proves that the policy in the page is what is enforced.
-    preview: { headers: demo ? {} : SECURITY_HEADERS },
+    preview: { headers: hosted ? {} : SECURITY_HEADERS },
     test: {
       include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'src/**/*.test.ts', 'src/**/*.test.tsx'],
       environment: 'node',

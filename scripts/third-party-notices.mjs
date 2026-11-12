@@ -41,5 +41,26 @@ if (fonts.length > 0) {
     lines.push('```text', file ? readFileSync(file, 'utf8').trim() : 'License text not found in the package; see the homepage above.', '```', '');
   }
 }
-writeFileSync('THIRD-PARTY-NOTICES.md', lines.join('\n'), 'utf8');
+// pdfjs-dist ships data files under their own licenses; the app bundles the character maps, the Foxit fonts and the image decoders.
+const PDFJS_DATA = [
+  ['Adobe CMaps (character maps)', 'cmaps/LICENSE'],
+  ['Foxit standard fonts (PDFium)', 'standard_fonts/LICENSE_FOXIT'],
+  ['JBIG2 decoder (PDFium)', 'wasm/LICENSE_JBIG2'],
+  ['JBIG2 decoder build (PDF.js)', 'wasm/LICENSE_PDFJS_JBIG2'],
+  ['OpenJPEG decoder', 'wasm/LICENSE_OPENJPEG'],
+  ['OpenJPEG decoder build (PDF.js)', 'wasm/LICENSE_PDFJS_OPENJPEG'],
+  ['qcms colour management', 'wasm/LICENSE_QCMS'],
+  ['qcms build (PDF.js)', 'wasm/LICENSE_PDFJS_QCMS'],
+];
+const pdfjs = Object.values(byLicense).flat().find((p) => p.name === 'pdfjs-dist');
+const pdfjsDir = pdfjs?.paths?.find((p) => existsSync(`${p}/package.json`));
+if (pdfjsDir) {
+  lines.push(`## Data files bundled from pdfjs-dist ${pdfjs.versions.join(', ')}`, '');
+  lines.push('PDF import bundles these files from the PDF.js package and serves them from the app itself. Their license texts:', '');
+  for (const [title, file] of PDFJS_DATA) {
+    lines.push(`### ${title}`, '');
+    lines.push('```text', readFileSync(`${pdfjsDir}/${file}`, 'utf8').trim(), '```', '');
+  }
+}
+writeFileSync('THIRD-PARTY-NOTICES.md', lines.join('\n').replace(/[\t ]+$/gm, ''), 'utf8');
 console.log(`THIRD-PARTY-NOTICES.md: ${total} packages, ${fonts.length} font licenses`);

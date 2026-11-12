@@ -55,10 +55,10 @@ describe('library', () => {
     const a = await createCourse(db, { name: '  Algorithms  ', code: 'CS201' });
     const b = await createCourse(db, { name: 'Security' });
     expect([a.name, a.code, a.order, b.order]).toEqual(['Algorithms', 'CS201', 0, 1]);
-    await expect(createCourse(db, { name: '   ' })).rejects.toThrow(/needs a name/);
+    await expect(createCourse(db, { name: '   ' })).rejects.toThrow(/과목 이름을 입력하세요/);
     await updateCourse(db, a.id, { examDate: '2026-12-20', examStyle: 'Answers must come strictly from the slides' });
     expect(await db.courses.get(a.id)).toMatchObject({ examDate: '2026-12-20', examStyle: expect.stringContaining('strictly') });
-    await expect(updateCourse(db, 'nope', { name: 'x' })).rejects.toThrow(/not found/);
+    await expect(updateCourse(db, 'nope', { name: 'x' })).rejects.toThrow(/과목을 찾을 수 없습니다/);
   });
 
   it('imports a lecture with slides, media and the original file', async () => {
@@ -125,8 +125,8 @@ describe('library', () => {
     for (const n of ['a', 'b', 'c']) ids.push((await importLecture(db, { courseId: course.id, fileName: `${n}.pptx`, ...(await deckOf({ slides: [simpleSlide(n, [n])] })) })).id);
     await reorderLectures(db, course.id, [ids[2]!, ids[0]!, ids[1]!]);
     expect((await listLectures(db, course.id)).map((l) => l.fileName)).toEqual(['c.pptx', 'a.pptx', 'b.pptx']);
-    await expect(reorderLectures(db, course.id, [ids[0]!, ids[1]!])).rejects.toThrow(/does not match/);
-    await expect(reorderLectures(db, course.id, [ids[0]!, ids[1]!, 'bogus'])).rejects.toThrow(/does not match/);
+    await expect(reorderLectures(db, course.id, [ids[0]!, ids[1]!])).rejects.toThrow(/강의 순서가 이 과목의 강의 목록과 맞지 않습니다/);
+    await expect(reorderLectures(db, course.id, [ids[0]!, ids[1]!, 'bogus'])).rejects.toThrow(/강의 순서가 이 과목의 강의 목록과 맞지 않습니다/);
   });
 });
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Basis } from '../study/types';
 import { extractJson, quoteInText } from '../study/pack';
+import { NOT_COVERED_RE, OUTSIDE_PARAGRAPH_RE, OUTSIDE_RE } from './markers';
 
 /** Reading what the model sent back. Model output is untrusted text: nothing here is trusted until it is validated. */
 
@@ -40,7 +41,7 @@ function lastMatch(re: RegExp, text: string): RegExpExecArray | undefined {
 }
 
 /** Placeholder text copied from the format instructions instead of a real question. */
-const PLACEHOLDER_FOLLOWUP = /^(a |the )?(short |follow[- ]?up )?question( \d)?$|^(first|second|third) question$/i;
+const PLACEHOLDER_FOLLOWUP = /^(a |the )?(short |follow[- ]?up )?question( \d)?$|^(first|second|third) question$|^(?:짧은 |후속 )?질문\s*\d?$|^(?:첫|두|세) ?번째 질문$/i;
 
 /** A follow-up chip: angle brackets and quotes the model wrapped around it are dropped; placeholders and fragments are not chips. */
 function cleanFollowup(raw: string): string | undefined {
@@ -59,7 +60,7 @@ function slideClaims(body: string): string {
   return body
     .replace(/```[\s\S]*?```/g, ' ')
     .split(/\n{2,}/)
-    .filter((para) => !/^\s*\**beyond the slides:/i.test(para))
+    .filter((para) => !OUTSIDE_PARAGRAPH_RE.test(para))
     .join('\n\n');
 }
 
@@ -108,8 +109,8 @@ export function parseTutorReply(rawText: string, sentRefs: readonly string[], no
   const known = new Set(sentRefs);
   const cites = [...new Set(refs.filter((r) => known.has(r)))];
   const unknownCites = [...new Set(refs.filter((r) => !known.has(r)))];
-  const hasOutside = /(^|\n)\s*\**beyond the slides:/i.test(body);
-  const notCovered = /(^|\n)\s*\**not covered on these slides:/i.test(body);
+  const hasOutside = OUTSIDE_RE.test(body);
+  const notCovered = NOT_COVERED_RE.test(body);
   const unverifiedQuotes = findUnverifiedQuotes(body, knownTexts);
 
   let basis: Basis = (basisMatch?.[1]?.toLowerCase() as Basis | undefined) ?? 'uncertain';
@@ -141,9 +142,9 @@ export function parseTutorReply(rawText: string, sentRefs: readonly string[], no
 export function relabelCitations(body: string, slideOf: (ref: string) => number | undefined, noteRefs: ReadonlySet<string>): string {
   return body.replace(CITE_GROUP, (_all, group: string) => {
     const names = labelsIn(group).map((ref) => {
-      if (noteRefs.has(ref)) return 'my note';
+      if (noteRefs.has(ref)) return '내 노트';
       const slide = slideOf(ref);
-      return slide === undefined ? 'source not found' : `slide ${slide}`;
+      return slide === undefined ? '출처 없음' : `슬라이드 ${slide}`;
     });
     return `[${[...new Set(names)].join(', ')}]`;
   });
@@ -171,24 +172,24 @@ export interface GradeProposal {
  * when the part that arrived happens to be valid JSON: the points that were lost would silently count as zero.
  */
 export function readGradeReply(reply: { text: string; truncated?: boolean }, rubric: readonly { id: string; marks: number }[]): { ok: true; proposal: GradeProposal } | { ok: false; error: string } {
-  if (reply.truncated) return { ok: false, error: 'The AI ran out of space while marking, so its marks are incomplete and were not used. Try again, or mark it yourself.' };
+  if (reply.truncated) return { ok: false, error: 'AI가 채점하는 도중 답 길이 한도에 닿아 점수가 불완전하므로 사용하지 않았습니다. 다시 시도하거나 직접 채점하세요.' };
   try {
     return { ok: true, proposal: parseGradeReply(reply.text, rubric) };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'The grader’s answer could not be read.' };
+    return { ok: false, error: e instanceof Error ? e.message : '채점 도우미의 답을 읽지 못했습니다.' };
   }
 }
 
 /** Validates the model's JSON against the real rubric. Never throws on bad marks; throws only if there is no usable JSON at all. */
 export function parseGradeReply(text: string, rubric: readonly { id: string; marks: number }[]): GradeProposal {
   const parsed = GradeJson.safeParse(extractJson(text));
-  if (!parsed.success) throw new Error('The grader’s answer was not in the expected format. Mark it yourself or try again.');
+  if (!parsed.success) throw new Error('채점 도우미의 답이 예상한 형식이 아닙니다. 직접 채점하거나 다시 시도하세요.');
   const byId = new Map(parsed.data.points.map((p) => [p.id, p]));
   const points = rubric.map((r) => {
     const p = byId.get(r.id);
     const raw = Number.isFinite(p?.awarded) ? (p!.awarded as number) : 0;
     const clamped = Math.min(r.marks, Math.max(0, Math.round(raw * 2) / 2));
-    return { id: r.id, awarded: clamped, max: r.marks, reason: p?.reason?.trim() || (p ? '' : 'Not addressed by the grader.') };
+    return { id: r.id, awarded: clamped, max: r.marks, reason: p?.reason?.trim() || (p ? '' : '채점 도우미가 다루지 않았습니다.') };
   });
   const total = points.reduce((n, p) => n + p.awarded, 0);
   return {

@@ -126,22 +126,22 @@ describe('persistence', () => {
 
   it('saves to the slide row, updates the extraction report, and can be undone', async () => {
     const { lecture } = await importIt({ slides: [diagramSlide(), { shapes: titleSp(2, 'Plain') + bodySp(3, [para('text')]) }] });
-    expect(lecture.report.potentiallyMissing.join(' ')).toMatch(/Picture that may hold text or a diagram.*slide 1/);
+    expect(lecture.report.potentiallyMissing.join(' ')).toMatch(/텍스트나 도식이 들어 있을 수 있는 그림.*슬라이드 1/);
     await setPictureText(db, lecture.id, 1, '4', 'high address\nlow address');
     const slides = await loadSlides(db, lecture.id);
     expect(slides[0]!.text).toContain('low address');
     expect(slides[0]!.confidence).toBe('high');
     const after = (await db.lectures.get(lecture.id))!;
-    expect(after.report.potentiallyMissing.join(' ')).not.toMatch(/Picture that may hold text/);
+    expect(after.report.potentiallyMissing.join(' ')).not.toMatch(/텍스트나 도식이 들어 있을 수 있는 그림/);
     expect(after.report.overallConfidence).toBeGreaterThan(lecture.report.overallConfidence);
     expect(after.report.flagsByCode.PICTURE_TEXT_ADDED).toBe(1);
     expect(after.updatedAt).toBeGreaterThanOrEqual(lecture.updatedAt);
 
     await setPictureText(db, lecture.id, 1, '4', '');
     expect((await loadSlides(db, lecture.id))[0]!.text).not.toContain('low address');
-    expect((await db.lectures.get(lecture.id))!.report.potentiallyMissing.join(' ')).toMatch(/Picture that may hold text/);
-    await expect(setPictureText(db, lecture.id, 1, '999', 'x')).rejects.toThrow(/not on this slide/);
-    await expect(setPictureText(db, lecture.id, 9, '4', 'x')).rejects.toThrow(/Slide not found/);
+    expect((await db.lectures.get(lecture.id))!.report.potentiallyMissing.join(' ')).toMatch(/텍스트나 도식이 들어 있을 수 있는 그림/);
+    await expect(setPictureText(db, lecture.id, 1, '999', 'x')).rejects.toThrow(/그 그림은 이 슬라이드\(페이지\)에 없습니다/);
+    await expect(setPictureText(db, lecture.id, 9, '4', 'x')).rejects.toThrow(/슬라이드\(페이지\)를 찾을 수 없습니다/);
   });
 
   it('survives replacing the lecture file with a newer version that still has the same picture', async () => {
@@ -153,7 +153,7 @@ describe('persistence', () => {
     expect(slides[0]!.text).toContain('kept words');
     expect(slides[0]!.pictureTexts).toEqual([{ elementId: '4', text: 'kept words' }]);
     expect(updated.report.flagsByCode.PICTURE_TEXT_ADDED).toBe(1);
-    expect(updated.report.potentiallyMissing.join(' ')).not.toMatch(/Picture that may hold text/);
+    expect(updated.report.potentiallyMissing.join(' ')).not.toMatch(/텍스트나 도식이 들어 있을 수 있는 그림/);
   });
 
   it('is dropped when the new file has a different picture in its place', async () => {

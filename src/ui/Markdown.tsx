@@ -26,7 +26,7 @@ export function Markdown({ children, className = '', inline = false }: { childre
             </a>
           ),
           // Images in markdown would be remote fetches: never load them.
-          img: ({ alt }) => <span className="italic">[image: {alt ?? ''}]</span>,
+          img: ({ alt }) => <span className="italic">[이미지: {alt ?? ''}]</span>,
           ...(inline ? { p: ({ children: kids }: { children?: React.ReactNode }) => <>{kids}</> } : {}),
         }}
       >

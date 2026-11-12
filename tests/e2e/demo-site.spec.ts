@@ -9,12 +9,12 @@ import { revealWithKeyboard, tab, trackRequests, watchProblems } from './helpers
  * The static public demo (`vite build --mode demo`, docs/DEMO.md), served under /studyai/ with NO response headers, as GitHub
  * Pages serves it: the policy that protects it is the one in the page.
  */
-const SAMPLE = 'Skyship Navigation (invented demo course)';
-const banner = (page: Page) => page.getByRole('region', { name: 'About this demo' });
+const SAMPLE = '비행선 항법(가상의 데모 과목)';
+const banner = (page: Page) => page.getByRole('region', { name: '이 데모에 대해' });
 
 async function loadSample(page: Page): Promise<void> {
   await page.goto('./');
-  await banner(page).getByRole('button', { name: 'Load the sample course' }).click();
+  await banner(page).getByRole('button', { name: '예시 과목 불러오기' }).click();
   await expect(page.getByRole('heading', { level: 1, name: SAMPLE })).toBeVisible();
 }
 
@@ -33,14 +33,14 @@ test('the banner says what the demo is, and the policy inside the page is what i
   expect(META_CSP).not.toContain("'unsafe-eval'");
   await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'no-referrer');
 
-  await expect(page).toHaveTitle('StudyAI demo');
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+  await expect(page).toHaveTitle('StudyAI 체험판');
+  await expect(page.getByRole('heading', { level: 1, name: '대시보드' })).toBeVisible();
   const note = banner(page);
-  await expect(note).toContainText('Demo.');
-  await expect(note).toContainText('The sample content is fictional.');
-  await expect(note).toContainText('stays in this browser and is never uploaded');
-  await expect(note).toContainText('AI features are not available in the demo.');
-  await expect(note.getByRole('button', { name: 'Load the sample course' })).toBeVisible();
+  await expect(note).toContainText('데모.');
+  await expect(note).toContainText('예시 내용은 지어낸 것입니다.');
+  await expect(note).toContainText('이 브라우저에만 남고 업로드되지 않습니다');
+  await expect(note).toContainText('데모에서는 AI 기능을 쓸 수 없습니다.');
+  await expect(note.getByRole('button', { name: '예시 과목 불러오기' })).toBeVisible();
   violations.length = 0; // the page itself loaded cleanly; now probe the policy
 
   const ran = await page.evaluate(() => {
@@ -64,70 +64,70 @@ test('one click loads the sample course: slides beside text, search, flashcards 
   await loadSample(page);
 
   // --- the course ------------------------------------------------------------------
-  await expect(page.getByRole('link', { name: 'Lecture 1 - Reading a sky chart' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Lecture 2 - Dead reckoning aloft' })).toBeVisible();
-  await expect(banner(page).getByRole('button', { name: 'Open the sample course' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '1강 - 하늘 지도 읽기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '2강 - 공중 추측 항법' })).toBeVisible();
+  await expect(banner(page).getByRole('button', { name: '예시 과목 열기' })).toBeVisible();
 
   // --- reading: the slide beside the text the app extracted ----------------------------
-  await page.getByRole('link', { name: 'Lecture 2 - Dead reckoning aloft' }).click();
-  await expect(page.getByText('Slide 1 of 7')).toBeVisible();
+  await page.getByRole('link', { name: '2강 - 공중 추측 항법' }).click();
+  await expect(page.getByText('슬라이드 1/7')).toBeVisible();
   for (const n of [2, 3, 4]) {
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByText(`Slide ${n} of 7`)).toBeVisible();
+    await expect(page.getByText(`슬라이드 ${n}/7`)).toBeVisible();
   }
   const content = page.getByRole('tabpanel');
-  await expect(content.getByText('A head wind takes its speed away')).toBeVisible();
+  await expect(content.getByText('맞바람은 그 속도만큼 대기 속도에서 빠집니다')).toBeVisible();
   await expect(content.locator('.katex').first()).toBeVisible(); // the formula is drawn
-  await expect(page.locator('section[aria-label="Slide"] .slide-stage')).toBeVisible();
+  await expect(page.locator('section[aria-label="슬라이드"] .slide-stage')).toBeVisible();
   await page.keyboard.press('ArrowRight');
   await expect(content.getByText('PLOT-LEG(start, heading, ground_speed, hours)')).toBeVisible();
   await page.keyboard.press('ArrowRight');
   await expect(content.getByRole('table')).toBeVisible();
 
   // --- search --------------------------------------------------------------------------
-  await page.getByLabel('Search all lectures').first().fill('mooring');
-  await page.getByLabel('Search all lectures').first().press('Enter');
-  await expect(page).toHaveURL(/\/studyai\/search\?q=mooring/);
-  const hit = page.getByRole('link', { name: /Chart symbols/ });
+  await page.getByLabel('모든 강의 검색').first().fill('계류탑');
+  await page.getByLabel('모든 강의 검색').first().press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/studyai/search\\?q=${encodeURIComponent('계류탑')}`));
+  const hit = page.getByRole('link', { name: /지도 기호/ });
   await expect(hit).toBeVisible();
-  await expect(hit.locator('mark')).toContainText(/mooring/i);
+  await expect(hit.locator('mark')).toContainText(/계류탑/);
   await hit.click();
-  await expect(page.getByText('Slide 4 of 7')).toBeVisible();
+  await expect(page.getByText('슬라이드 4/7')).toBeVisible();
 
   // --- flashcards: approved from the start, sources already checked ----------------------
-  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link').first().click();
-  await tab(page, /Flashcards/).click();
-  await expect(page.getByText(/13 cards ready/)).toBeVisible();
-  await page.getByRole('link', { name: 'Start review' }).click();
-  await expect(page.getByRole('button', { name: 'Show answer' })).toBeVisible();
+  await page.getByRole('navigation', { name: '이동 경로' }).getByRole('link').first().click();
+  await tab(page, /플래시카드/).click();
+  await expect(page.getByText(/카드 13장 준비됨/)).toBeVisible();
+  await page.getByRole('link', { name: '복습 시작' }).click();
+  await expect(page.getByRole('button', { name: '답 보기' })).toBeVisible();
   await revealWithKeyboard(page);
-  await expect(page.getByText('Source verified')).toBeVisible();
+  await expect(page.getByText('출처 확인됨')).toBeVisible();
   await page.keyboard.press('3');
-  await expect(page.getByRole('button', { name: 'Show answer' }).or(page.getByRole('heading', { name: 'Session finished' }))).toBeVisible();
+  await expect(page.getByRole('button', { name: '답 보기' }).or(page.getByRole('heading', { name: '복습을 마쳤습니다' }))).toBeVisible();
 
   // --- notes: markdown with a drawn formula (KaTeX runs under the policy in the page) ---------------
   await page.goto('./');
   await page.getByRole('link', { name: SAMPLE }).first().click();
-  await tab(page, 'Notes').click();
-  await page.getByRole('link', { name: /Lecture 1 in brief/ }).click();
-  await expect(page.getByText('Imported study pack')).toHaveCount(2);
+  await tab(page, '노트').click();
+  await page.getByRole('link', { name: /1강 요약/ }).click();
+  await expect(page.getByText('가져온 학습 팩')).toHaveCount(2);
   await expect(page.locator('.katex').first()).toBeVisible();
 
   // --- a practice exam from the sample questions ------------------------------------------
   await page.goto('./');
   await page.getByRole('link', { name: SAMPLE }).first().click();
-  await tab(page, 'Practice and exams').click();
-  await expect(page.getByText('8 approved questions in your bank.')).toBeVisible();
-  await page.getByRole('button', { name: 'Build an exam' }).click();
-  const builder = page.getByRole('dialog', { name: 'Build a practice exam' });
-  await expect(builder.getByText(/8 approved questions match/)).toBeVisible();
-  await builder.getByRole('button', { name: 'Start exam' }).click();
-  await expect(page.getByText(/^0 of \d+ answered$/)).toBeVisible();
-  const main = page.getByRole('main', { name: 'Question' });
+  await tab(page, '연습과 시험').click();
+  await expect(page.getByText('문제 은행에 승인한 문제가 8개 있습니다.')).toBeVisible();
+  await page.getByRole('button', { name: '시험 만들기' }).click();
+  const builder = page.getByRole('dialog', { name: '모의시험 만들기' });
+  await expect(builder.getByText(/승인된 문제 8개가 맞고/)).toBeVisible();
+  await builder.getByRole('button', { name: '시험 시작' }).click();
+  await expect(page.getByText(/^\d+문제 중 0문제 답함$/)).toBeVisible();
+  const main = page.getByRole('main', { name: '문제' });
   await expect(main).toBeVisible();
-  await page.getByRole('button', { name: 'Submit' }).first().click();
-  const confirm = page.getByRole('dialog', { name: 'Submit your exam?' });
-  await confirm.getByRole('button', { name: 'Submit now' }).click();
+  await page.getByRole('button', { name: '제출' }).first().click();
+  const confirm = page.getByRole('dialog', { name: '시험을 제출할까요?' });
+  await confirm.getByRole('button', { name: '지금 제출' }).click();
   await expect(page).toHaveURL(/\/results$/);
 
   expect(problems, 'console errors / CSP violations').toEqual([]);
@@ -142,22 +142,22 @@ test('the AI tutor is absent everywhere and nothing is sent', async ({ page }) =
   const requests = trackRequests(page);
   await loadSample(page);
 
-  await tab(page, 'AI tutor').click();
-  await expect(page.getByText('No AI here')).toBeVisible();
-  await expect(page.getByText('AI is not available in this copy of the app.')).toBeVisible();
-  await page.getByLabel('Your question').fill('What is dead reckoning?');
-  await expect(page.getByRole('button', { name: /^Send/ })).toBeDisabled();
+  await tab(page, 'AI 튜터').click();
+  await expect(page.getByText('여기에는 AI가 없습니다')).toBeVisible();
+  await expect(page.getByText('이 앱 사본에서는 AI를 쓸 수 없습니다.')).toBeVisible();
+  await page.getByLabel('내 질문').fill('추측 항법이란 무엇인가요?');
+  await expect(page.getByRole('button', { name: /보내기$/ })).toBeDisabled();
 
-  await page.getByRole('button', { name: 'Study packs from your own AI' }).click();
-  await page.getByRole('menuitem', { name: 'Generate with the AI tutor (Gemini)…' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Generate study material with the AI tutor' });
-  await expect(dialog.getByText('AI is not available in this copy of the app.')).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Generate and check' })).toBeDisabled();
+  await page.getByRole('button', { name: '학습 팩 만들기와 가져오기' }).click();
+  await page.getByRole('menuitem', { name: 'AI 학습 자료 생성…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'AI로 학습 자료 만들기' });
+  await expect(dialog.getByText('이 앱 사본에서는 AI를 쓸 수 없습니다.')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '만들고 확인하기' })).toBeDisabled();
   await page.keyboard.press('Escape');
 
-  await page.getByRole('link', { name: 'Settings and backup' }).first().click();
-  await expect(page.getByText('AI is off here')).toBeVisible();
-  await expect(page.getByText(/no AI server, so nothing is ever sent anywhere/)).toBeVisible();
+  await page.getByRole('link', { name: '설정과 백업' }).first().click();
+  await expect(page.getByText('이 사본에는 AI가 없습니다')).toBeVisible();
+  await expect(page.getByText(/AI 서버가 없어서 아무것도 다른 곳으로 보내지 않습니다/)).toBeVisible();
   await expect(page.getByLabel(/owner key/i)).toHaveCount(0); // no sign-in form for a server that does not exist
 
   expect(requests.filter((u) => u.includes('/api/') || !u.startsWith(ORIGINS.demo) && !u.startsWith('blob:') && !u.startsWith('data:'))).toEqual([]);
@@ -167,7 +167,7 @@ test('the AI tutor is absent everywhere and nothing is sent', async ({ page }) =
 test('the shipped demo files hold no AI client, no provider host and no key', async ({ request }) => {
   const files = readdirSync('dist-demo/assets').filter((f) => /\.(js|css)$/.test(f));
   expect(files.length).toBeGreaterThan(10);
-  const bad = /api\.anthropic\.com|x-api-key|sk-ant-|ANTHROPIC_API_KEY|anthropic-version|generativelanguage\.googleapis\.com|x-goog-api-key|AIza[0-9A-Za-z_-]{20,}|GEMINI_API_KEY|\/api\/(?:health|auth|owner|ai)/;
+  const bad = /api\.anthropic\.com|x-api-key|sk-ant-|ANTHROPIC_API_KEY|anthropic-version|generativelanguage\.googleapis\.com|x-goog-api-key|AIza[0-9A-Za-z_-]{20,}|GEMINI_API_KEY|\/api\/(?:health|status|chatgpt|auth|owner|ai)/;
   for (const f of files) {
     const body = await (await request.get(`assets/${f}`)).text();
     expect(bad.test(body), `${f} must not contain an AI client, a provider host or key material`).toBe(false);
@@ -182,9 +182,9 @@ test('the sample course survives a reload and is opened, not copied, by a second
   await expect(page.getByRole('heading', { level: 1, name: SAMPLE })).toBeVisible();
   await page.goto('./');
   await expect(page.getByRole('link', { name: SAMPLE }).first()).toBeVisible();
-  await banner(page).getByRole('button', { name: 'Open the sample course' }).click();
+  await banner(page).getByRole('button', { name: '예시 과목 열기' }).click();
   await expect(page).toHaveURL(course);
-  await expect(page.getByRole('navigation', { name: 'Courses' }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('navigation', { name: '과목' }).getByRole('listitem')).toHaveCount(1);
 });
 
 test('the banner and the sample course fit a phone', async ({ page }) => {
@@ -192,7 +192,7 @@ test('the banner and the sample course fit a phone', async ({ page }) => {
   await loadSample(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.goto('./');
-  await expect(banner(page).getByRole('button', { name: 'Open the sample course' })).toBeVisible();
+  await expect(banner(page).getByRole('button', { name: '예시 과목 열기' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

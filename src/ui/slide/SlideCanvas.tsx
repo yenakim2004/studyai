@@ -186,7 +186,8 @@ export const SlideCanvas = memo(function SlideCanvas({ slide, slideWidth, slideH
             <polygon points={polygon} fill={s.fill ?? 'none'} stroke={s.line?.color ?? 'none'} strokeWidth={s.line ? `max(1px, ${emu(s.line.width)})` : 0} vectorEffect="non-scaling-stroke" />
           </svg>
         )}
-        <div style={{ position: 'absolute', inset: 0, ...style }}>{hasText && paragraphsView(s.paragraphs, { align: s.anchor ?? (s.isTextBox ? 'top' : 'middle') })}</div>
+        {/* A PDF page's own picture already shows these words: keep them invisible but selectable (styles.css). */}
+        <div className={s.textLayer ? 'slide-text-layer' : undefined} style={{ position: 'absolute', inset: 0, ...style }}>{hasText && paragraphsView(s.paragraphs, { align: s.anchor ?? (s.isTextBox ? 'top' : 'middle') })}</div>
       </>
     );
   };
@@ -221,7 +222,7 @@ export const SlideCanvas = memo(function SlideCanvas({ slide, slideWidth, slideH
 
   const chartView = (c: ChartData | null): ReactNode => (
     <div style={{ width: '100%', height: '100%', border: `max(1px, 0.1cqw) dashed #8a8f98`, padding: emu(91440), overflow: 'hidden', fontSize: cq(12), lineHeight: 1.25 }}>
-      <strong>{c ? `Chart (${c.chartType})${c.title ? `: ${c.title}` : ''}` : 'Chart (no readable data)'}</strong>
+      <strong>{c ? `차트(${c.chartType})${c.title ? `: ${c.title}` : ''}` : '차트(읽을 수 있는 데이터 없음)'}</strong>
       {c && (
         <div style={{ marginTop: '0.3em' }}>
           {c.series.slice(0, 6).map((s, i) => (
@@ -266,7 +267,7 @@ export const SlideCanvas = memo(function SlideCanvas({ slide, slideWidth, slideH
         return lineView(el);
       case 'picture': {
         const url = el.media ? media.get(el.media) : undefined;
-        if (!url || !el.renderable) return placeholderView(`Image not shown${el.mime ? ` (${el.mime.replace('image/x-', '').replace('image/', '').toUpperCase()})` : ''}`);
+        if (!url || !el.renderable) return placeholderView(`이미지를 표시할 수 없음${el.mime ? ` (${el.mime.replace('image/x-', '').replace('image/', '').toUpperCase()})` : ''}`);
         const c = el.crop;
         const wr = c ? 1 - c.l - c.r : 1;
         const hr = c ? 1 - c.t - c.b : 1;
@@ -297,11 +298,11 @@ export const SlideCanvas = memo(function SlideCanvas({ slide, slideWidth, slideH
         );
       case 'ole': {
         const url = el.previewMedia ? media.get(el.previewMedia) : undefined;
-        return url && el.previewRenderable ? <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill' }} /> : placeholderView(`Embedded object${el.progId ? ` (${el.progId})` : ''}`);
+        return url && el.previewRenderable ? <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill' }} /> : placeholderView(`포함 개체${el.progId ? `(${el.progId})` : ''}`);
       }
       case 'media': {
         const url = el.posterMedia ? media.get(el.posterMedia) : undefined;
-        return url ? <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill' }} /> : placeholderView(`Embedded ${el.mediaKind}`);
+        return url ? <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill' }} /> : placeholderView(`포함된 ${el.mediaKind === 'video' ? '동영상' : '오디오'}`);
       }
       case 'unsupported':
         return placeholderView(el.what);

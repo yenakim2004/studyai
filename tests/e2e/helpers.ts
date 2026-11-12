@@ -31,17 +31,18 @@ export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presenta
 
 /** Create a course from the empty dashboard (or via the sidebar button) and land on its page. */
 export async function createCourse(page: Page, name: string, code?: string): Promise<void> {
-  const empty = page.getByRole('button', { name: 'Create a course' });
+  const empty = page.getByRole('button', { name: '과목 만들기' });
   if (await empty.isVisible().catch(() => false)) await empty.click();
-  else await page.getByRole('button', { name: 'New course' }).first().click();
-  await page.getByLabel('Course name').fill(name);
-  if (code) await page.getByLabel('Course code (optional)').fill(code);
-  await page.getByRole('button', { name: 'Create course' }).click();
+  else await page.getByRole('button', { name: '새 과목' }).first().click();
+  const dialog = page.getByRole('dialog', { name: '새 과목' });
+  await dialog.getByLabel('과목 이름').fill(name);
+  if (code) await dialog.getByLabel('과목 코드(선택)').fill(code);
+  await dialog.getByRole('button', { name: '만들기', exact: true }).click();
   await page.getByRole('heading', { level: 1, name }).waitFor();
 }
 
 export async function importFiles(page: Page, files: { name: string; buffer: Buffer }[]): Promise<void> {
-  await page.locator('input[aria-label="Choose PowerPoint files"]').setInputFiles(files.map((f) => ({ name: f.name, mimeType: PPTX_MIME, buffer: f.buffer })));
+  await page.locator('input[aria-label="강의 파일 선택"]').setInputFiles(files.map((f) => ({ name: f.name, mimeType: PPTX_MIME, buffer: f.buffer })));
 }
 
 /** Collect every request the page makes (for the "no third-party traffic" check). */
@@ -91,7 +92,7 @@ export const PACK = {
 
 
 /** A tab of the course page (the breadcrumb can contain links with the same name). */
-export const tab = (page: Page, name: string | RegExp) => page.getByRole('navigation', { name: 'Course sections' }).getByRole('link', { name });
+export const tab = (page: Page, name: string | RegExp) => page.getByRole('navigation', { name: '과목 메뉴' }).getByRole('link', { name });
 
 /**
  * Reveals a flashcard's answer with the keyboard. The review page is loaded on demand, so a key pressed in the
@@ -101,7 +102,7 @@ export const tab = (page: Page, name: string | RegExp) => page.getByRole('naviga
 export async function revealWithKeyboard(page: Page): Promise<void> {
   await expect(async () => {
     await page.keyboard.press('Space');
-    await expect(page.getByRole('group', { name: 'How well did you remember?' })).toBeVisible({ timeout: 1000 });
+    await expect(page.getByRole('group', { name: '얼마나 잘 기억했나요?' })).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: 10_000 });
 }
 
@@ -109,16 +110,16 @@ export async function seed(page: Page) {
   await page.goto('/');
   await createCourse(page, 'Computability', 'BCS303');
   await importFiles(page, [{ name: 'Lecture 4 - Turing machines.pptx', buffer: lectureBytes() }]);
-  await expect(page.getByText(/Imported: 5 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 5장/)).toBeVisible();
 }
 
 export async function importPack(page: Page) {
-  await page.getByRole('button', { name: 'Study packs from your own AI' }).click();
-  await page.getByRole('menuitem', { name: 'Import a study pack…' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Import a study pack' });
+  await page.getByRole('button', { name: '학습 팩 만들기와 가져오기' }).click();
+  await page.getByRole('menuitem', { name: '학습 팩 가져오기…' }).click();
+  const dialog = page.getByRole('dialog', { name: '학습 팩 가져오기' });
   // Paste with surrounding chatter and a code fence, as copied from a chat window.
-  await dialog.getByLabel('Pack JSON').fill(`Here is your pack!\n\`\`\`json\n${JSON.stringify(PACK, null, 2)}\n\`\`\`\nGood luck.`);
-  await dialog.getByRole('button', { name: 'Check this pack' }).click();
+  await dialog.getByLabel('팩 JSON').fill(`Here is your pack!\n\`\`\`json\n${JSON.stringify(PACK, null, 2)}\n\`\`\`\nGood luck.`);
+  await dialog.getByRole('button', { name: '이 팩 확인' }).click();
   return dialog;
 }
 

@@ -86,12 +86,12 @@ export function ExamPage() {
         window.clearTimeout(timer.current);
         await flush();
         await submitAttempt(db, attempt.id, questions, conditions ? Date.now() - attempt.startedAt : base.current.elapsed + (Date.now() - base.current.at));
-        if (auto) toast.show('Time is up. Your exam was submitted.', 'info');
+        if (auto) toast.show('시간이 다 되어 시험을 제출했습니다.', 'info');
         navigate(`/exam/${attempt.id}/results`, { replace: true });
       } catch (err) {
         submitted.current = false;
         setSubmitting(false);
-        toast.show(err instanceof Error ? err.message : 'Could not submit.', 'error');
+        toast.show(err instanceof Error ? err.message : '제출하지 못했습니다.', 'error');
       }
     },
     [attempt, questions, conditions, flush, navigate, toast],
@@ -135,7 +135,7 @@ export function ExamPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [cfg?.layout, questions.length]);
 
-  if (attempt === null || exam === null) return <NotFound what="exam" />;
+  if (attempt === null || exam === null) return <NotFound what="시험이" />;
   if (!attempt || !exam || !cfg || !questionsRaw || !course) {
     return (
       <div className="p-6">
@@ -147,8 +147,8 @@ export function ExamPage() {
   if (questions.length === 0) {
     return (
       <div className="mx-auto max-w-xl p-6">
-        <Callout tone="bad" title="The questions for this exam are no longer available">
-          They were deleted from your question bank. <Link className="underline" to={`/course/${course.id}/practice`}>Back to practice</Link>
+        <Callout tone="bad" title="이 시험의 문제를 더 이상 쓸 수 없습니다">
+          문제 은행에서 삭제되었습니다. <Link className="underline" to={`/course/${course.id}/practice`}>연습으로 돌아가기</Link>
         </Callout>
       </div>
     );
@@ -165,13 +165,13 @@ export function ExamPage() {
     return (
       <article key={q.id} className="rounded-[var(--radius-panel)] border border-rule bg-surface p-5 md:p-6" aria-labelledby={`qh-${q.id}`}>
         <h2 id={`qh-${q.id}`} className="sr-only">
-          Question {i + 1} of {questions.length}
+          문제 {i + 1}/{questions.length}
         </h2>
         <QuestionPrompt q={q} index={i + 1} />
         <AnswerInput q={q} answer={a} onChange={(p) => change(q.id, p)} id={`ans-${q.id}`} />
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button size="sm" variant={flagged.has(q.id) ? 'secondary' : 'ghost'} aria-pressed={flagged.has(q.id)} onClick={() => void toggleFlag(db, attempt.id, q.id)}>
-            <Flag className="size-4" aria-hidden /> {flagged.has(q.id) ? 'Flagged for review' : 'Flag for review'}
+            <Flag className="size-4" aria-hidden /> {flagged.has(q.id) ? '다시 볼 문제로 표시됨' : '다시 볼 문제로 표시'}
           </Button>
           {canHint && q.hint && (
             <Button
@@ -182,20 +182,20 @@ export function ExamPage() {
                 change(q.id, { hintUsed: true });
               }}
             >
-              <Lightbulb className="size-4" aria-hidden /> Show hint
+              <Lightbulb className="size-4" aria-hidden /> 힌트 보기
             </Button>
           )}
           {immediate && !showSolution && (
             <Button size="sm" onClick={() => setRevealed(new Set(revealed).add(q.id))} disabled={!hasAnswer(a)}>
-              Check my answer
+              내 답 확인
             </Button>
           )}
         </div>
-        {canHint && q.hint && hintShown.has(q.id) && <p className="mt-3 rounded bg-warn-soft px-3 py-2 text-sm text-ink">Hint: {q.hint}</p>}
+        {canHint && q.hint && hintShown.has(q.id) && <p className="mt-3 rounded bg-warn-soft px-3 py-2 text-sm text-ink">힌트: {q.hint}</p>}
         {showSolution && (
           <div className="mt-4 border-t border-rule pt-4">
             <Solution q={q} chosen={a?.optionIds} />
-            <p className="mt-3 text-[13px] text-ink-3">Written answers are marked when you submit the exam.</p>
+            <p className="mt-3 text-[13px] text-ink-3">서술형 답은 시험을 제출할 때 채점합니다.</p>
           </div>
         )}
       </article>
@@ -211,40 +211,40 @@ export function ExamPage() {
         </div>
         <div className="flex items-center gap-3">
           <p className="text-sm tabular-nums text-ink-2" aria-live="off">
-            {answeredCount} of {questions.length} answered
+            {questions.length}문제 중 {answeredCount}문제 답함
           </p>
-          <p className={`rounded-full px-3 py-1 text-sm font-medium tabular-nums ${remaining !== undefined && remaining < 300_000 ? 'bg-bad-soft text-bad' : 'bg-sunken text-ink'}`} role="timer" aria-label={remaining !== undefined ? `Time left ${clock(remaining)}` : `Time spent ${clock(elapsed)}`}>
-            {remaining !== undefined ? `${clock(remaining)} left` : clock(elapsed)}
+          <p className={`rounded-full px-3 py-1 text-sm font-medium tabular-nums ${remaining !== undefined && remaining < 300_000 ? 'bg-bad-soft text-bad' : 'bg-sunken text-ink'}`} role="timer" aria-label={remaining !== undefined ? `남은 시간 ${clock(remaining)}` : `걸린 시간 ${clock(elapsed)}`}>
+            {remaining !== undefined ? `${clock(remaining)} 남음` : clock(elapsed)}
           </p>
           <Button variant="primary" onClick={() => setConfirming(true)} disabled={submitting}>
-            <Send className="size-4" aria-hidden /> Submit
+            <Send className="size-4" aria-hidden /> 제출
           </Button>
         </div>
       </header>
       <p className="sr-only" aria-live="polite">
-        {remaining !== undefined && remaining <= 60_000 && remaining > 55_000 ? 'One minute left.' : remaining !== undefined && remaining <= 300_000 && remaining > 295_000 ? 'Five minutes left.' : ''}
+        {remaining !== undefined && remaining <= 60_000 && remaining > 55_000 ? '1분 남았습니다.' : remaining !== undefined && remaining <= 300_000 && remaining > 295_000 ? '5분 남았습니다.' : ''}
       </p>
 
       {conditions && (
         <p className="mt-4 rounded bg-sunken px-3 py-2 text-sm text-ink-2">
-          Exam conditions: no hints, no answers until you submit, and the clock keeps running even if you leave this page.
+          시험 조건: 힌트를 쓸 수 없고, 제출하기 전에는 답을 볼 수 없으며, 이 페이지를 떠나도 시간은 계속 흐릅니다.
         </p>
       )}
 
       {cfg.layout === 'one' ? (
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_11rem]">
-          <main aria-label="Question">
+          <main aria-label="문제">
             {questionCard(questions[index]!, index)}
             <div className="mt-4 flex items-center justify-between">
               <Button onClick={() => setIndex(Math.max(0, index - 1))} disabled={index === 0}>
-                <ChevronLeft className="size-4" aria-hidden /> Previous
+                <ChevronLeft className="size-4" aria-hidden /> 이전
               </Button>
               <Button onClick={() => setIndex(Math.min(questions.length - 1, index + 1))} disabled={index === questions.length - 1}>
-                Next <ChevronRight className="size-4" aria-hidden />
+                다음 <ChevronRight className="size-4" aria-hidden />
               </Button>
             </div>
           </main>
-          <nav aria-label="Question navigator" className="lg:sticky lg:top-24 lg:self-start">
+          <nav aria-label="문제 이동" className="lg:sticky lg:top-24 lg:self-start">
             <ol className="grid grid-cols-6 gap-1.5 sm:grid-cols-10 lg:grid-cols-4">
               {questions.map((q, i) => (
                 <li key={q.id}>
@@ -252,7 +252,7 @@ export function ExamPage() {
                     type="button"
                     onClick={() => setIndex(i)}
                     aria-current={i === index ? 'step' : undefined}
-                    aria-label={`Question ${i + 1}${hasAnswer(answers[q.id]) ? ', answered' : ', not answered'}${flagged.has(q.id) ? ', flagged' : ''}`}
+                    aria-label={`문제 ${i + 1}${hasAnswer(answers[q.id]) ? ', 답함' : ', 답 안 함'}${flagged.has(q.id) ? ', 표시함' : ''}`}
                     className={`relative flex size-10 items-center justify-center rounded-[var(--radius-control)] border text-sm tabular-nums ${i === index ? 'border-accent bg-accent text-accent-ink' : hasAnswer(answers[q.id]) ? 'border-accent/50 bg-accent-soft text-ink' : 'border-rule-strong bg-surface text-ink-2 hover:bg-sunken'}`}
                   >
                     {i + 1}
@@ -264,7 +264,7 @@ export function ExamPage() {
           </nav>
         </div>
       ) : (
-        <main className="mt-5 flex flex-col gap-5" aria-label="Exam paper">
+        <main className="mt-5 flex flex-col gap-5" aria-label="시험지">
           {questions.map((q, i) => questionCard(q, i))}
         </main>
       )}
@@ -272,25 +272,25 @@ export function ExamPage() {
       <Dialog
         open={confirming}
         onClose={() => setConfirming(false)}
-        title="Submit your exam?"
+        title="시험을 제출할까요?"
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirming(false)}>
-              Keep working
+              계속 풀기
             </Button>
             <Button variant="primary" disabled={submitting} onClick={() => void doSubmit(false)}>
-              Submit now
+              지금 제출
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-2 text-sm">
           <p>
-            You answered {answeredCount} of {questions.length} questions.
+            {questions.length}문제 중 {answeredCount}문제에 답했습니다.
           </p>
-          {questions.length - answeredCount > 0 && <p className="text-warn">{questions.length - answeredCount} question{questions.length - answeredCount === 1 ? ' has' : 's have'} no answer and will score zero.</p>}
-          {flagged.size > 0 && <p className="text-ink-2">{flagged.size} flagged for review.</p>}
-          <p className="text-ink-2">After submitting you cannot change your answers. Multiple-choice and true/false are marked straight away; for written answers you compare with the model answer and mark yourself.</p>
+          {questions.length - answeredCount > 0 && <p className="text-warn">답하지 않은 {questions.length - answeredCount}문제는 0점이 됩니다.</p>}
+          {flagged.size > 0 && <p className="text-ink-2">다시 볼 문제로 {flagged.size}개를 표시했습니다.</p>}
+          <p className="text-ink-2">제출하면 답을 바꿀 수 없습니다. 객관식과 참/거짓 문제는 바로 채점되고, 서술형 답은 모범 답안과 비교해 직접 채점합니다.</p>
         </div>
       </Dialog>
     </div>

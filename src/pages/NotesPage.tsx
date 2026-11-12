@@ -32,25 +32,25 @@ export function NotesPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Notes</h2>
-          <p className="text-sm text-ink-2">Your notes stay available offline. Every block shows where it came from, and anything you edit becomes yours.</p>
+          <h2 className="text-lg font-semibold">노트</h2>
+          <p className="text-sm text-ink-2">노트는 오프라인에서도 쓸 수 있습니다. 모든 블록에 출처가 표시되며, 직접 고친 블록은 내 것으로 바뀝니다.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setCreating(true)}>
-            <FilePlus2 className="size-4" aria-hidden /> New note
+            <FilePlus2 className="size-4" aria-hidden /> 새 노트
           </Button>
           <Button onClick={() => setGenerating(true)} disabled={lectures.length === 0}>
-            <WandSparkles className="size-4" aria-hidden /> Notes from slides
+            <WandSparkles className="size-4" aria-hidden /> 슬라이드로 노트 만들기
           </Button>
           <Button onClick={() => setSheeting(true)} disabled={cards.filter((c) => c.status === 'approved').length === 0}>
-            <ScrollText className="size-4" aria-hidden /> Revision sheet from flashcards
+            <ScrollText className="size-4" aria-hidden /> 플래시카드로 복습 시트 만들기
           </Button>
         </div>
       </div>
 
       {sorted.length === 0 ? (
         <div className="mt-4">
-          <EmptyState title="No notes yet">Start from your slides: “Notes from slides” builds complete, editable lecture notes in lecture order, with every block linked to its slide. You can also write your own or import notes in a study pack.</EmptyState>
+          <EmptyState title="아직 노트가 없습니다">슬라이드에서 시작하세요. “슬라이드로 노트 만들기”는 강의 순서대로 편집할 수 있는 완전한 강의 노트를 만들고, 블록마다 해당 슬라이드를 연결합니다. 직접 쓰거나 학습 팩으로 노트를 가져올 수도 있습니다.</EmptyState>
         </div>
       ) : (
         <ul className="mt-4 divide-y divide-rule rounded-[var(--radius-panel)] border border-rule bg-surface">
@@ -67,10 +67,10 @@ export function NotesPage() {
                     </span>
                   </span>
                   <span className="text-sm text-ink-2">
-                    {n.blocks.length} block{n.blocks.length === 1 ? '' : 's'}
-                    {mine > 0 ? `, ${mine} written by you` : ''}
+                    블록 {n.blocks.length}개
+                    {mine > 0 ? `, 내가 쓴 블록 ${mine}개` : ''}
                   </span>
-                  <span className="text-sm text-ink-3 md:text-right">{new Date(n.updatedAt).toLocaleDateString()}</span>
+                  <span className="text-sm text-ink-3 md:text-right">{new Date(n.updatedAt).toLocaleDateString('ko-KR')}</span>
                 </Link>
               </li>
             );
@@ -92,18 +92,18 @@ export function NotesPage() {
       <PickLecturesDialog
         open={generating}
         onClose={() => setGenerating(false)}
-        title="Notes from your slides"
-        action="Create notes"
+        title="슬라이드로 노트 만들기"
+        action="노트 만들기"
         lectures={lectures}
-        description="Creates one editable note per lecture, with a block for every visible slide in lecture order. The text is exactly what was extracted from the slide, and each block links back to it. This is not AI-written."
+        description="강의마다 편집할 수 있는 노트를 하나씩 만들고, 보이는 슬라이드마다 강의 순서대로 블록을 둡니다. 텍스트는 슬라이드에서 추출한 그대로이며 블록마다 슬라이드로 연결됩니다. AI가 쓴 내용이 아닙니다."
         onConfirm={async (ids) => {
           let made = 0;
           for (const l of lectures.filter((x) => ids.has(x.id))) {
             const blocks = lectureNotesFromSlides(l, await loadSlides(db, l.id));
-            await createNote(db, { courseId: course.id, lectureId: l.id, title: `${l.title}: lecture notes`, kind: 'lecture-notes', blocks });
+            await createNote(db, { courseId: course.id, lectureId: l.id, title: `${l.title}: 강의 노트`, kind: 'lecture-notes', blocks });
             made += 1;
           }
-          toast.show(`Created ${made} note${made === 1 ? '' : 's'}.`, 'ok');
+          toast.show(`노트 ${made}개를 만들었습니다.`, 'ok');
         }}
       />
 
@@ -113,10 +113,10 @@ export function NotesPage() {
         onCreate={async (kind) => {
           const blocks = notesFromCards(cards, kind);
           if (blocks.length === 0) {
-            toast.show(`None of your approved flashcards are ${NOTE_KIND_LABEL[kind].toLowerCase()} cards yet.`, 'info');
+            toast.show(`승인한 플래시카드 중 아직 “${NOTE_KIND_LABEL[kind]}”에 넣을 카드가 없습니다.`, 'info');
             return;
           }
-          const n = await createNote(db, { courseId: course.id, title: `${course.name}: ${NOTE_KIND_LABEL[kind].toLowerCase()}`, kind, blocks });
+          const n = await createNote(db, { courseId: course.id, title: `${course.name}: ${NOTE_KIND_LABEL[kind]}`, kind, blocks });
           setSheeting(false);
           navigate(`/course/${course.id}/notes/${n.id}`);
         }}
@@ -141,14 +141,14 @@ function NewNoteDialog({ open, onClose, lectures, onCreate }: { open: boolean; o
     <Dialog
       open={open}
       onClose={onClose}
-      title="New note"
+      title="새 노트"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button variant="primary" type="submit" form="note-form" disabled={!title.trim()}>
-            Create note
+            노트 만들기
           </Button>
         </>
       }
@@ -161,10 +161,10 @@ function NewNoteDialog({ open, onClose, lectures, onCreate }: { open: boolean; o
           if (title.trim()) void onCreate(title, kind, lectureId || undefined);
         }}
       >
-        <Field label="Title" htmlFor="note-title">
+        <Field label="제목" htmlFor="note-title">
           <TextInput id="note-title" value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
-        <Field label="Kind" htmlFor="note-kind">
+        <Field label="종류" htmlFor="note-kind">
           <Select id="note-kind" value={kind} onChange={(e) => setKind(e.target.value as NoteKind)}>
             {NOTE_KINDS.map((k) => (
               <option key={k} value={k}>
@@ -173,9 +173,9 @@ function NewNoteDialog({ open, onClose, lectures, onCreate }: { open: boolean; o
             ))}
           </Select>
         </Field>
-        <Field label="About which lecture?" htmlFor="note-lecture">
+        <Field label="어느 강의에 대한 노트인가요?" htmlFor="note-lecture">
           <Select id="note-lecture" value={lectureId} onChange={(e) => setLectureId(e.target.value)}>
-            <option value="">The whole course</option>
+            <option value="">과목 전체</option>
             {lectures.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.title}
@@ -205,7 +205,7 @@ function PickLecturesDialog({ open, onClose, title, action, description, lecture
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button
             variant="primary"
@@ -220,7 +220,7 @@ function PickLecturesDialog({ open, onClose, title, action, description, lecture
               }
             }}
           >
-            {busy ? 'Working' : action}
+            {busy ? '처리 중' : action}
           </Button>
         </>
       }
@@ -259,26 +259,26 @@ function SheetDialog({ open, onClose, onCreate }: { open: boolean; onClose: () =
     <Dialog
       open={open}
       onClose={onClose}
-      title="Revision sheet from flashcards"
+      title="플래시카드로 복습 시트 만들기"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button variant="primary" onClick={() => void onCreate(kind)}>
-            Create sheet
+            시트 만들기
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3 text-sm">
-        <p className="text-ink-2">Collects your approved flashcards into one printable page. Each entry keeps its source and where it came from.</p>
-        <Field label="Which sheet?" htmlFor="sheet-kind">
+        <p className="text-ink-2">승인한 플래시카드를 인쇄할 수 있는 한 페이지로 모읍니다. 항목마다 출처와 만든 방식이 남습니다.</p>
+        <Field label="어떤 시트인가요?" htmlFor="sheet-kind">
           <Select id="sheet-kind" value={kind} onChange={(e) => setKind(e.target.value as NoteKind)}>
             {options.map((k) => (
               <option key={k} value={k}>
                 {NOTE_KIND_LABEL[k]}
-                {k === 'revision-sheet' ? ' (definitions, concepts, formulas and comparisons)' : ''}
+                {k === 'revision-sheet' ? '(정의, 개념, 공식, 비교)' : ''}
               </option>
             ))}
           </Select>

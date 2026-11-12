@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ScriptedGemini } from '../worker/src/scripted-gemini';
+import { scriptedPack } from './helpers/scripted-pack';
 import { parsePptx } from '../src/core/pptx';
 import type { ParsedDeck, SlideData } from '../src/core/pptx/model';
 import { withPictureText } from '../src/core/pptx/picturetext';
@@ -78,7 +78,7 @@ describe('reading a mathematical lecture', () => {
     const md = markdownOf(deck, [slide(deck, 8)]);
     expect(md).toContain('if p < r');
     const task = AiTaskSchema.parse({ task: 'generate', lectureMarkdown: md, wants: { notes: false, cards: false, questions: true }, amount: 'few' });
-    const user = buildAiRequest(task, 'gemini-3.1-flash-lite', 4_000).request.messages[0]!.content;
+    const user = buildAiRequest(task, 'test-model', 4_000).request.messages[0]!.content;
     expect(user).toContain('if p &lt; r');
     expect(user).not.toContain('if p < r');
     expect(escapeData('a < b && c > d')).toBe('a &lt; b &amp;&amp; c &gt; d');
@@ -161,10 +161,10 @@ describe('telling the student what a mathematical slide does not explain', () =>
     // the sum: n is in the claim, but the index i is never introduced; the board is mentioned in the notes
     expect(say(4)).toEqual([
       expect.stringMatching(/^refers-elsewhere: .*“on the board”/),
-      'formula-undefined: Slide 4 (“Sum of the first n integers”) has a formula, and the slide does not say what its symbols mean (not explained: i).',
+      'formula-undefined: 4번 슬라이드(“Sum of the first n integers”)에 공식이 있지만 슬라이드가 기호의 뜻을 말하지 않습니다(설명 없는 기호: i).',
     ]);
     // T and n are introduced by "running time T(n)"; c is a constant nobody introduces
-    expect(say(6)[0]).toMatch(/^formula-undefined: .*\(not explained: c, b\)\.$/);
+    expect(say(6)[0]).toMatch(/^formula-undefined: .*\(설명 없는 기호: c, b\)\.$/);
     expect(say(5)).toEqual([]); // the proof uses n and k in its own words
     expect(say(7)).toEqual([]); // "Let a ≥ 1 and b > 1 be constants and let T(n) = aT(n/b) + f(n)"
     expect(say(8)).toEqual([]);
@@ -190,8 +190,8 @@ describe('teaching a mathematical lecture', () => {
     expect(notesFor(8)).toEqual([TEACHING_NOTES.algorithm]); // pseudocode set in code, under the heading "Algorithm: merge sort"
     expect(notesFor(9)).toContain(TEACHING_NOTES.table);
     expect(notesFor(3)).toEqual([]);
-    expect(TEACHING_NOTES.derivation).toMatch(/say that the step is skipped on the slide/);
-    expect(TEACHING_NOTES.derivation).toMatch(/LaTeX between \$ signs and do not change a formula/);
+    expect(TEACHING_NOTES.derivation).toMatch(/슬라이드에서 그 단계가 생략되었다고 말하세요/);
+    expect(TEACHING_NOTES.derivation).toMatch(/\$ 기호 사이의 LaTeX로 쓰고, 슬라이드가 쓴 공식을 바꾸지 마세요/);
   });
 
   it('builds a tutor request whose rules, notes and gaps all say: only what the slides say', async () => {
@@ -206,14 +206,14 @@ describe('teaching a mathematical lecture', () => {
       history: [],
       gaps: picked.flatMap((n) => slideGaps(slide(deck, n)).map((g) => g.message)),
     };
-    const { request } = buildAiRequest(AiTaskSchema.parse(task), 'gemini-3.1-flash-lite', 4_000);
+    const { request } = buildAiRequest(AiTaskSchema.parse(task), 'test-model', 4_000);
     const sys = request.system!;
-    expect(sys).toContain('TEACHING NOTES FOR THESE SLIDES');
+    expect(sys).toContain('이 슬라이드를 가르치는 방법');
     for (const note of [TEACHING_NOTES.formula, TEACHING_NOTES.derivation, TEACHING_NOTES.proof, TEACHING_NOTES.algorithm]) expect(sys).toContain(note);
-    expect(sys).toContain('(not explained: i)');
+    expect(sys).toContain('(설명 없는 기호: i)');
     expect(sys).toContain('$$\\sum_{i=1}^{n} {i} = \\frac{n(n+1)}{2}$$');
     expect(sys).toContain('`  if p &lt; r`'); // the pseudocode arrives with its indentation, and escaped
-    expect(sys).toMatch(/Mathematics in \$\.\.\.\$ LaTeX/);
+    expect(sys).toMatch(/수학은 \$\.\.\.\$ LaTeX로/);
   });
 
   it('teaches the lecture in order, in parts of a few slides, without losing any slide', async () => {
@@ -281,9 +281,8 @@ describe('planning and checking exam questions for a mathematical lecture', () =
   async function ask(group: readonly Slot[], slides: SlideData[], deck: ParsedDeck): Promise<PackPlan> {
     const planned: PlannedSlot[] = group.map(({ n: _n, ...rest }) => rest);
     const task = AiTaskSchema.parse({ task: 'generate', lectureMarkdown: markdownOf(deck, slides), wants: { notes: false, cards: false, questions: true }, amount: 'normal', blueprint: planned });
-    const { request } = buildAiRequest(task, 'gemini-3.1-flash-lite', 4_000);
-    const out = await new ScriptedGemini().complete({ model: request.model, maxOutputTokens: request.maxOutputTokens, messages: request.messages, ...(request.system ? { system: request.system } : {}) }, new AbortController().signal);
-    if (out.kind !== 'ok') throw new Error('the scripted model did not answer');
+    const { request } = buildAiRequest(task, 'test-model', 4_000);
+    const out = { text: scriptedPack(request) };
     const ctx: LectureContext = { id: 'lec', title: 'Divide and conquer', fileHash: deck.fileHash, revision: 1, slideCount: 12, slideText: (n) => (slides[n - 1] ? slideVerificationText(slides[n - 1]!) : undefined) };
     return planPack(JSON.parse(out.text), 'course', [ctx], {}, 0, { expected: planned });
   }

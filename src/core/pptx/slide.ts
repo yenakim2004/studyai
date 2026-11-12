@@ -254,7 +254,7 @@ export function parseSlide(deck: DeckCtx, part: string, index: number, slideId: 
       code: 'TEXT_NOT_CAPTURED',
       severity: 'attention',
       slide: index,
-      message: `${missing.length} piece(s) of text exist in the slide but were found in an unsupported container. They are listed under "Unplaced text"; check the original slide.`,
+      message: `슬라이드에 지원하지 않는 컨테이너 속 텍스트가 ${missing.length}개 있습니다. "Unplaced text" 아래에 모아 두었으니 원본 슬라이드를 확인하세요.`,
     });
     text += `${text ? '\n\n' : ''}[Unplaced text]\n${missing.join('\n')}`;
   }
@@ -265,12 +265,12 @@ export function parseSlide(deck: DeckCtx, part: string, index: number, slideId: 
       code: 'MATH_CONVERTED',
       severity: 'info',
       slide: index,
-      message: `${sink.equations} equation(s) were converted from PowerPoint's equation format to LaTeX. Verify symbols against the original slide.`,
+      message: `수식 ${sink.equations}개를 PowerPoint 수식 형식에서 LaTeX로 변환했습니다. 기호를 원본 슬라이드와 대조하세요.`,
     });
   }
 
   const hidden = attr(root, 'show') === '0';
-  if (hidden) flags.push({ code: 'HIDDEN_SLIDE', severity: 'info', slide: index, message: 'This slide is hidden in the presentation (not shown when presenting).' });
+  if (hidden) flags.push({ code: 'HIDDEN_SLIDE', severity: 'info', slide: index, message: '프레젠테이션에서 숨긴 슬라이드입니다(발표할 때 나오지 않음).' });
 
   const timing = child(root, 'p:timing');
   const hasAnimations = !!timing && allDescendants(timing, 'p:cTn').some((c) => c.attrs['presetClass'] !== undefined);
@@ -279,7 +279,7 @@ export function parseSlide(deck: DeckCtx, part: string, index: number, slideId: 
       code: 'ANIMATIONS',
       severity: 'info',
       slide: index,
-      message: 'This slide has animations. All content is extracted as if fully revealed; the original reveal order is not captured.',
+      message: '애니메이션이 있는 슬라이드입니다. 모든 내용이 나타난 상태로 추출했고 원래 나타나는 순서는 담지 않았습니다.',
     });
   }
 
@@ -293,7 +293,7 @@ export function parseSlide(deck: DeckCtx, part: string, index: number, slideId: 
       code: 'NO_EXTRACTABLE_TEXT',
       severity: 'attention',
       slide: index,
-      message: 'This slide has no extractable text. Its content is in picture(s) or objects and is NOT available as text (no OCR is performed).',
+      message: '추출할 텍스트가 없는 슬라이드입니다. 내용이 그림이나 개체 안에 있어 텍스트로 쓸 수 없습니다(OCR은 하지 않습니다).',
     });
   } else if (bigPicture) {
     flags.push({
@@ -302,7 +302,7 @@ export function parseSlide(deck: DeckCtx, part: string, index: number, slideId: 
       severity: layout?.type === 'title' ? 'info' : 'warning',
       slide: index,
       elementId: bigPicture.id,
-      message: 'A picture on this slide may contain text, a diagram or a screenshot that was not extracted. Check the original slide.',
+      message: '이 슬라이드의 그림에 추출하지 않은 텍스트, 도식, 스크린샷이 있을 수 있습니다. 원본 슬라이드를 확인하세요.',
     });
   }
 

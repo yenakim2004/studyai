@@ -70,7 +70,7 @@ function proseOf(slide: SlideData): string {
 /** Whether the words of the slide use this symbol on its own ("T(n)", "let n be", "a ≥ 1"). */
 const mentions = (prose: string, sym: string): boolean => new RegExp(`(?<![\\p{L}\\p{N}])${sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(prose);
 
-const quote = (title: string): string => (title.trim() ? ` (“${tidyScripts(title.trim()).slice(0, 50)}”)` : '');
+const quote = (title: string): string => (title.trim() ? `(“${tidyScripts(title.trim()).slice(0, 50)}”)` : '');
 
 /** At most about this many characters, cut at a word. */
 const shorten = (s: string, max = 100): string => (s.length <= max ? s : `${s.slice(0, max).replace(/\s+\S*$/, '')}…`);
@@ -93,21 +93,21 @@ function floatingLabels(slide: SlideData): { labels: number; arrows: number } {
 
 /** The gaps of one slide, in the order a student would meet them. */
 export function slideGaps(slide: SlideData): Gap[] {
-  if (slide.status !== 'ok') return [{ slide: slide.index, kind: 'heading-only', message: `Slide ${slide.index} could not be read, so nothing is known about it.` }];
+  if (slide.status !== 'ok') return [{ slide: slide.index, kind: 'heading-only', message: `${slide.index}번 슬라이드를 읽지 못해 내용을 전혀 알 수 없습니다.` }];
   const out: Gap[] = [];
   const add = (kind: GapKind, message: string) => out.push({ slide: slide.index, kind, message });
   const traits = slideTraits(slide);
   const typed = (slide.pictureTexts?.length ?? 0) > 0;
   const body = Math.max(0, words(slide.text) - words(slide.title));
 
-  if (body < 6 && !typed && !traits.diagram) add('heading-only', `Slide ${slide.index}${quote(slide.title)} has only a heading: it explains nothing by itself.`);
+  if (body < 6 && !typed && !traits.diagram) add('heading-only', `${slide.index}번 슬라이드${quote(slide.title)}에는 제목만 있어 그 자체로는 아무것도 설명하지 않습니다.`);
 
   // a picture whose words are not available (and not typed by the student) is a hole in the lesson
   const unread = slide.flags.some((f) => (f.code === 'LARGE_PICTURE' || f.code === 'UNRENDERABLE_IMAGE' || f.code === 'NO_EXTRACTABLE_TEXT') && !f.resolved) && slide.counts.pictures > 0;
-  if (unread) add('picture-unread', `Slide ${slide.index}${quote(slide.title)} has a picture whose words are not available as text, so what it shows is not known (the student can type its words in).`);
+  if (unread) add('picture-unread', `${slide.index}번 슬라이드${quote(slide.title)}에는 글자를 텍스트로 읽을 수 없는 그림이 있어 무엇을 보여 주는지 알 수 없습니다(학생이 그림의 글자를 직접 입력할 수 있습니다).`);
 
   const refers = REFERS.exec(slide.text) ?? REFERS.exec(slide.notes);
-  if (refers) add('refers-elsewhere', `Slide ${slide.index}${quote(slide.title)} refers to something that is not on the slide itself (“${refers[0].trim()}”).`);
+  if (refers) add('refers-elsewhere', `${slide.index}번 슬라이드${quote(slide.title)}가 슬라이드에 없는 것을 가리킵니다(“${refers[0].trim()}”).`);
 
   // (a recap restates what other slides define)
   if (traits.math && !DEFINES.test(slide.text) && !isMetaSlide(slide)) {
@@ -117,22 +117,22 @@ export function slideGaps(slide: SlideData): Gap[] {
     const unexplained = formulaSymbols(latex.join(' ')).filter((s) => !mentions(prose, s));
     // no readable formula symbols at all (a formula that could not be read): keep the plain warning
     if (latex.length === 0 || unexplained.length > 0) {
-      const which = unexplained.length > 0 ? ` (not explained: ${unexplained.slice(0, 6).join(', ')})` : '';
-      add('formula-undefined', `Slide ${slide.index}${quote(slide.title)} has a formula, and the slide does not say what its symbols mean${which}.`);
+      const which = unexplained.length > 0 ? `(설명 없는 기호: ${unexplained.slice(0, 6).join(', ')})` : '';
+      add('formula-undefined', `${slide.index}번 슬라이드${quote(slide.title)}에 공식이 있지만 슬라이드가 기호의 뜻을 말하지 않습니다${which}.`);
     }
   }
 
   // a question the slide puts to the student: the slide does not answer it, so nobody may claim it does
   const asked = slideQuestions(slide)[0];
-  if (asked) add('question-unanswered', `Slide ${slide.index}${quote(slide.title)} asks a question (“${shorten(tidyScripts(asked.text))}”) and no answer to it is written on the slide.`);
+  if (asked) add('question-unanswered', `${slide.index}번 슬라이드${quote(slide.title)}가 질문을 던지지만(“${shorten(tidyScripts(asked.text))}”) 슬라이드에 답이 적혀 있지 않습니다.`);
 
   // labels and arrows set around the slide: what each marks or joins is shown by where it sits, which text does not keep
   const { labels, arrows } = floatingLabels(slide);
   if ((arrows >= 2 && labels >= 2) || labels >= 4) {
-    add('arrangement', `Slide ${slide.index}${quote(slide.title)} has ${labels} short labels${arrows > 0 ? ` and ${arrows} arrows or lines` : ''} placed around the slide: what each one marks or joins is shown only by where it sits, so the text does not say it.`);
+    add('arrangement', `${slide.index}번 슬라이드${quote(slide.title)}에는 짧은 라벨 ${labels}개${arrows > 0 ? `와 화살표나 선 ${arrows}개` : ''}가 슬라이드 곳곳에 놓여 있습니다. 각각이 무엇을 가리키거나 잇는지는 위치로만 드러나므로 텍스트에는 나타나지 않습니다.`);
   }
 
-  if (slide.flags.some((f) => f.code === 'SMARTART' && !f.resolved)) add('diagram-inferred', `Slide ${slide.index}${quote(slide.title)} is a diagram whose arrangement was inferred from its text, so the order or hierarchy may differ from the original.`);
+  if (slide.flags.some((f) => f.code === 'SMARTART' && !f.resolved)) add('diagram-inferred', `${slide.index}번 슬라이드${quote(slide.title)}는 텍스트로 배치를 추정한 도식이라 순서나 위계가 원본과 다를 수 있습니다.`);
   return out;
 }
 

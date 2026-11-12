@@ -33,7 +33,7 @@ function emptyFailedSlide(index: number, slideId: number, part: string, err: unk
         code: 'SLIDE_PARSE_FAILED',
         severity: 'attention',
         slide: index,
-        message: `This slide could not be read (${message}). None of its content is available.`,
+        message: `이 슬라이드를 읽지 못했습니다(${message}). 내용을 전혀 쓸 수 없습니다.`,
       },
     ],
     confidence: 'low',
@@ -96,7 +96,7 @@ function finaliseMedia(pkg: Package, deck: DeckCtx, slides: SlideData[]): Map<st
     if (!key) return;
     if (failed.has(key) || !media.has(key)) {
       apply(undefined, false);
-      if (!el.decorative) addFlag(slide, { code: 'MISSING_MEDIA', severity: 'attention', elementId: el.id, message: 'An image could not be read from the file, so it cannot be shown. Check the original slide.' });
+      if (!el.decorative) addFlag(slide, { code: 'MISSING_MEDIA', severity: 'attention', elementId: el.id, message: '파일에서 이미지를 읽지 못해 표시할 수 없습니다. 원본 슬라이드를 확인하세요.' });
       return;
     }
     const asset = media.get(key)!;
@@ -108,7 +108,7 @@ function finaliseMedia(pkg: Package, deck: DeckCtx, slides: SlideData[]): Map<st
         code: 'UNRENDERABLE_IMAGE',
         severity: big ? 'attention' : 'warning',
         elementId: el.id,
-        message: `An image in ${asset.mime.replace('image/x-', '').toUpperCase()} format cannot be displayed in the browser. Its content is not available here; view the original slide.`,
+        message: `${asset.mime.replace('image/x-', '').toUpperCase()} 형식의 이미지는 브라우저에서 표시할 수 없습니다. 여기서는 내용을 볼 수 없으니 원본 슬라이드를 보세요.`,
       });
     }
   };
@@ -154,7 +154,7 @@ export async function parsePptx(data: Uint8Array, opts: ParseOptions = {}): Prom
   const rels = pkg.rels(mainRel.target);
   const sldIds = kids(path(presentation, 'p:sldIdLst'), 'p:sldId');
   if (sldIds.length > limits.maxSlides) {
-    throw new PptxError('TOO_MANY_SLIDES', `Presentation has ${sldIds.length} slides; limit is ${limits.maxSlides}.`);
+    throw new PptxError('TOO_MANY_SLIDES', `슬라이드가 ${sldIds.length}장으로 한도(${limits.maxSlides}장)를 넘습니다.`);
   }
   const slideRefs = sldIds
     .map((n) => ({ id: numAttr(n, 'id') ?? 0, part: rels.get(attr(n, 'r:id') ?? '')?.target }))

@@ -21,11 +21,11 @@ test('README screenshots, from synthetic lectures only', async ({ page }) => {
   await page.goto('/');
   await createCourse(page, 'Theory and algorithms', 'CS301');
   await importFiles(page, [{ name: 'Computability.pptx', buffer: Buffer.from(computabilityDeck()) }]);
-  await expect(page.getByText(/Imported: 15 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 15장/)).toBeVisible();
   await importFiles(page, [{ name: 'Divide and conquer.pptx', buffer: Buffer.from(mathDeck()) }]);
-  await expect(page.getByText(/Imported: 12 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 12장/)).toBeVisible();
   await importFiles(page, [{ name: 'Lecture 4 - Turing machines.pptx', buffer: lectureBytes() }]);
-  await expect(page.getByText(/Imported: 5 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 5장/)).toBeVisible();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/course.png` });
 
@@ -41,7 +41,7 @@ test('README screenshots, from synthetic lectures only', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: /Theory and algorithms/ }).first().click();
   const dialog = await importPack(page);
-  await expect(dialog.getByText(/cited quotes were found/)).toBeVisible();
+  await expect(dialog.getByText(/개를 슬라이드에서 찾았습니다/)).toBeVisible();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/pack-check.png` });
 

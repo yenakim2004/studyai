@@ -9,6 +9,15 @@ import { BasisChip, SourceList, SourceStatusChip } from './Sources';
 
 const ROWS: Partial<Record<QuestionRow['type'], number>> = { short: 5, define: 5, long: 12, scenario: 8, case: 12, compare: 9, problem: 9, calculation: 8, algorithm: 12, programming: 14, proof: 12, diagram: 6, attack: 9 };
 
+/**
+ * The words of an answer option. A true/false question's two options are always "o1" (true) and "o2" (false), so they are named
+ * here: questions saved before the app was Korean still carry the English words "True" and "False".
+ */
+export function optionText(q: Pick<QuestionRow, 'type'>, o: { id: string; text: string }): string {
+  if (q.type === 'truefalse' && (o.id === 'o1' || o.id === 'o2')) return o.id === 'o1' ? '참' : '거짓';
+  return o.text;
+}
+
 export function TypeLabel({ q }: { q: QuestionRow }) {
   return <span>{QUESTION_TYPE_LABEL[q.type]}</span>;
 }
@@ -18,11 +27,9 @@ export function QuestionPrompt({ q, index }: { q: QuestionRow; index?: number })
   return (
     <div>
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-3">
-        {index !== undefined && <span className="font-medium text-ink">Question {index}</span>}
+        {index !== undefined && <span className="font-medium text-ink">문제 {index}</span>}
         <TypeLabel q={q} />
-        <span>
-          {q.marks} mark{q.marks === 1 ? '' : 's'}
-        </span>
+        <span>{q.marks}점</span>
         {q.topic && <span>{q.topic}</span>}
       </p>
       <div className="mt-2 text-[1.075rem]">
@@ -39,7 +46,7 @@ export function AnswerInput({ q, answer, onChange, disabled = false, id }: { q: 
     const chosen = new Set(answer?.optionIds ?? []);
     return (
       <fieldset disabled={disabled} className="mt-3">
-        <legend className="mb-2 text-sm text-ink-2">{multi ? 'Select all that apply.' : 'Choose one answer.'}</legend>
+        <legend className="mb-2 text-sm text-ink-2">{multi ? '해당하는 것을 모두 고르세요.' : '답을 하나 고르세요.'}</legend>
         <ul className="flex flex-col gap-2">
           {q.options.map((o) => (
             <li key={o.id}>
@@ -62,7 +69,7 @@ export function AnswerInput({ q, answer, onChange, disabled = false, id }: { q: 
                   }}
                 />
                 <span className="min-w-0 flex-1">
-                  <LazyMarkdown>{o.text}</LazyMarkdown>
+                  <LazyMarkdown>{optionText(q, o)}</LazyMarkdown>
                 </span>
               </label>
             </li>
@@ -76,7 +83,7 @@ export function AnswerInput({ q, answer, onChange, disabled = false, id }: { q: 
   return (
     <div className="mt-3">
       <label htmlFor={id} className="sr-only">
-        Your answer
+        내 답
       </label>
       <textarea
         id={id}
@@ -85,7 +92,7 @@ export function AnswerInput({ q, answer, onChange, disabled = false, id }: { q: 
         rows={ROWS[q.type] ?? 8}
         spellCheck={!code}
         onChange={(e) => onChange({ text: e.target.value })}
-        placeholder={code ? 'Write your code or pseudocode here' : 'Write your answer here'}
+        placeholder={code ? '여기에 코드나 의사코드를 쓰세요' : '여기에 답을 쓰세요'}
         className={`w-full rounded-[var(--radius-control)] border border-rule-strong bg-surface px-3 py-2.5 leading-relaxed text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-70 ${code ? 'font-mono text-[14px]' : 'font-serif text-[1.05rem]'}`}
       />
       {advice && <p className={`mt-1 text-[13px] ${advice.ok ? 'text-ok' : 'text-ink-3'}`}>{advice.message}</p>}
@@ -104,11 +111,11 @@ export function Solution({ q, chosen, hints }: { q: QuestionRow; chosen?: string
             const picked = chosen?.includes(o.id);
             return (
               <li key={o.id} className={`flex items-start gap-2 rounded px-2 py-1 ${o.correct ? 'bg-ok-soft' : picked ? 'bg-bad-soft' : ''}`}>
-                {o.correct ? <CircleCheck className="mt-1 size-4 shrink-0 text-ok" aria-label="Correct answer" /> : picked ? <CircleX className="mt-1 size-4 shrink-0 text-bad" aria-label="Your wrong choice" /> : <span className="size-4 shrink-0" aria-hidden />}
+                {o.correct ? <CircleCheck className="mt-1 size-4 shrink-0 text-ok" aria-label="정답" /> : picked ? <CircleX className="mt-1 size-4 shrink-0 text-bad" aria-label="내가 고른 오답" /> : <span className="size-4 shrink-0" aria-hidden />}
                 <span className="min-w-0 flex-1">
-                  <LazyMarkdown>{o.text}</LazyMarkdown>
+                  <LazyMarkdown>{optionText(q, o)}</LazyMarkdown>
                 </span>
-                <span className="shrink-0 text-xs text-ink-3">{o.correct ? (picked ? 'Correct, you chose this' : 'Correct answer') : picked ? 'You chose this' : ''}</span>
+                <span className="shrink-0 text-xs text-ink-3">{o.correct ? (picked ? '정답, 내가 고름' : '정답') : picked ? '내가 고름' : ''}</span>
               </li>
             );
           })}
@@ -116,7 +123,7 @@ export function Solution({ q, chosen, hints }: { q: QuestionRow; chosen?: string
       )}
       {q.modelAnswer && (
         <div>
-          <p className="mb-1 text-sm font-medium">Model answer</p>
+          <p className="mb-1 text-sm font-medium">모범 답안</p>
           <div className="rounded-[var(--radius-control)] border border-rule bg-sunken/40 p-3">
             <LazyMarkdown>{q.modelAnswer}</LazyMarkdown>
           </div>
@@ -124,7 +131,7 @@ export function Solution({ q, chosen, hints }: { q: QuestionRow; chosen?: string
       )}
       {q.rubric.length > 0 && (
         <div>
-          <p className="mb-1 text-sm font-medium">What the marks are for</p>
+          <p className="mb-1 text-sm font-medium">채점 기준</p>
           <ul className="divide-y divide-rule rounded-[var(--radius-control)] border border-rule">
             {q.rubric.map((p) => {
               const h = hintOf(p.id);
@@ -134,7 +141,7 @@ export function Solution({ q, chosen, hints }: { q: QuestionRow; chosen?: string
                     <MathText>{p.text}</MathText>
                     {h && (
                       <span className={`ml-2 text-xs ${h.status === 'likely' ? 'text-ok' : h.status === 'missing' ? 'text-ink-3' : 'text-warn'}`}>
-                        {h.status === 'likely' ? 'looks covered in your answer' : h.status === 'missing' ? 'not found in your answer' : 'partly found in your answer'}
+                        {h.status === 'likely' ? '내 답에 들어 있는 것 같음' : h.status === 'missing' ? '내 답에서 찾지 못함' : '내 답에서 일부만 찾음'}
                       </span>
                     )}
                   </span>
@@ -169,8 +176,8 @@ export function SelfMarker({ q, answerText, existing, onSave }: { q: QuestionRow
 
   return (
     <div className="rounded-[var(--radius-panel)] border border-rule bg-surface p-4">
-      <h4 className="text-sm font-semibold">Mark your answer</h4>
-      <p className="mt-1 text-[13px] text-ink-3">Compare your answer with the model answer and give yourself marks honestly, point by point. This is your own estimate, not an examiner’s mark.</p>
+      <h4 className="text-sm font-semibold">내 답 채점하기</h4>
+      <p className="mt-1 text-[13px] text-ink-3">내 답을 모범 답안과 비교해 기준마다 솔직하게 점수를 매기세요. 채점자의 점수가 아니라 내가 추정한 점수입니다.</p>
       {q.rubric.length > 0 ? (
         <ul className="mt-3 flex flex-col gap-2">
           {q.rubric.map((p) => {
@@ -182,12 +189,12 @@ export function SelfMarker({ q, answerText, existing, onSave }: { q: QuestionRow
                   {h && (
                     <span className="ml-2 inline-flex items-center gap-1 text-xs text-ink-3">
                       {h.status === 'likely' ? <CircleCheck className="size-3.5 text-ok" aria-hidden /> : <CircleHelp className="size-3.5" aria-hidden />}
-                      hint: {h.status === 'likely' ? 'probably covered' : h.status === 'missing' ? 'not found by keyword' : 'partly found'}
+                      힌트: {h.status === 'likely' ? '들어 있는 것 같음' : h.status === 'missing' ? '키워드로 찾지 못함' : '일부만 찾음'}
                     </span>
                   )}
                 </span>
                 <label className="flex items-center gap-2 whitespace-nowrap text-sm">
-                  <span className="sr-only">Marks for: {p.text}</span>
+                  <span className="sr-only">점수: {p.text}</span>
                   <TextInput
                     type="number"
                     min={0}
@@ -205,20 +212,20 @@ export function SelfMarker({ q, answerText, existing, onSave }: { q: QuestionRow
         </ul>
       ) : (
         <label className="mt-3 flex items-center gap-2 whitespace-nowrap text-sm">
-          Marks
+          점수
           <TextInput type="number" min={0} max={q.marks} step={0.5} value={manual} onChange={(e) => setManual(Number(e.target.value))} className="min-h-9 w-24 text-right" />
           <span className="text-ink-3">/ {q.marks}</span>
         </label>
       )}
       <div className="mt-3">
         <label htmlFor={`cm-${q.id}`} className="text-sm font-medium">
-          Note to yourself (what to fix)
+          나에게 남길 메모(고칠 점)
         </label>
         <TextInput id={`cm-${q.id}`} value={comment} onChange={(e) => setComment(e.target.value)} className="mt-1" />
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
         <p className="text-sm" aria-live="polite">
-          Total: <span className="font-semibold tabular-nums">{total}</span> / {q.marks}
+          합계: <span className="font-semibold tabular-nums">{total}</span> / {q.marks}
         </p>
         <Button
           variant="primary"
@@ -233,7 +240,7 @@ export function SelfMarker({ q, answerText, existing, onSave }: { q: QuestionRow
             }
           }}
         >
-          {existing ? 'Update my mark' : 'Save my mark'}
+          {existing ? '내 점수 고치기' : '내 점수 저장'}
         </Button>
       </div>
     </div>

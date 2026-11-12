@@ -8,10 +8,10 @@ import type { SlideData } from '../pptx/model';
 const words = (s: string): number => s.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
 
 /** The label a lecture gives to a question it puts to the room. */
-const CHECK_IN = /^\s*(?:check[- ]?in|quiz|poll|clicker|think[- ]pair[- ]share|your turn)\b/i;
+const CHECK_IN = /^\s*(?:(?:check[- ]?in|quiz|poll|clicker|think[- ]pair[- ]share|your turn)\b|(?:확인 문제|확인 질문|퀴즈|투표|생각해 보기|함께 풀기))/i;
 /** A numbered or lettered answer to pick from. */
 const OPTION = /^\s*(?:\d+|[A-Da-d])[.)]\s+\S/;
-const CHOOSE = /\b(?:choose|select|pick|circle|tick|vote)\b/i;
+const CHOOSE = /\b(?:choose|select|pick|circle|tick|vote)\b|(?:고르시오|고르세요|골라|선택하시오|선택하세요)/i;
 
 export interface SlideQuestion {
   /** The question as the slide words it (its last line, up to the question mark). */

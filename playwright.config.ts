@@ -5,10 +5,10 @@ import { DEMO_PATH, ORIGINS, PORTS } from './tests/e2e/ports';
  * End-to-end tests run against the *production build* served by `vite preview`,
  * using the Chrome already installed on the machine (no browser download).
  *
- * A second server runs the real Worker + Durable Object locally (wrangler dev, with a scripted fake Gemini and
- * freshly generated test secrets) for the tests in `worker-*.spec.ts`; a third runs it with the whole site private
- * (the sign-in gate) for `gate-*.spec.ts`; a fourth serves the static public demo build under its sub-path for `demo-*.spec.ts`
- * (no headers: its policy is in the page). No Cloudflare account and no network are used.
+ * A second server runs the real Worker + Durable Object locally (wrangler dev, with a scripted fake OpenAI and
+ * freshly generated test secrets) for the tests in `worker-*.spec.ts`; a third runs it as a hosted copy
+ * (offline learning, with the local AI routes disabled) for `gate-*.spec.ts`; a fourth serves the static public demo build under its sub-path for `demo-*.spec.ts`
+ * (no headers: its policy is in the page). No Cloudflare account or external AI request is used; test traffic stays on loopback.
  */
 const WORKER = /worker-.*\.spec\.ts/;
 const GATE = /gate-.*\.spec\.ts/;
@@ -18,6 +18,7 @@ const serverEnv = { E2E_PORT_PREVIEW: String(PORTS.preview), E2E_PORT_WORKER: St
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  testIgnore: /sites-static\.spec\.ts/,
   timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -32,8 +33,8 @@ export default defineConfig({
     acceptDownloads: true,
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 } }, grep: /^(?!.*@mobile)/, testIgnore: [WORKER, GATE, DEMO] },
-    { name: 'mobile', use: { ...devices['Pixel 7'], channel: 'chrome' }, grep: /@mobile/, testIgnore: [WORKER, GATE, DEMO] },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 } }, grep: /^(?!.*@mobile)/, testIgnore: [WORKER, GATE, DEMO, /sites-static\.spec\.ts/] },
+    { name: 'mobile', use: { ...devices['Pixel 7'], channel: 'chrome' }, grep: /@mobile/, testIgnore: [WORKER, GATE, DEMO, /sites-static\.spec\.ts/] },
     { name: 'worker', testMatch: WORKER, use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 }, baseURL: ORIGINS.worker } },
     { name: 'gate', testMatch: GATE, use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1440, height: 900 }, baseURL: ORIGINS.gate } },
     // The trailing slash matters: tests open pages with relative paths such as './settings'.

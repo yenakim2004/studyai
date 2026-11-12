@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Report a security vulnerability (private)
-    url: https://github.com/zuhairhalawa/studyai/security/advisories/new
-    about: Security problems are not issues. Use GitHub's private vulnerability reporting, as described in SECURITY.md.
+  - name: 보안 취약점 비공개 제보
+    url: https://github.com/yenakim2004/studyai/security/advisories/new
+    about: 보안 문제는 공개 이슈에 쓰지 말고 SECURITY.md의 안내에 따라 비공개로 알려 주세요.

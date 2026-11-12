@@ -1,23 +1,14 @@
 import { useSyncExternalStore } from 'react';
-import type { AiReply, AiTask, OwnerStatus } from '@/core/tutor/contract';
+import type { AiReply, AiStatus, AiTask, ChatGptModel } from '@/core/tutor/contract';
 
 /**
- * The browser's only connection to the AI server (the Worker). Everything is same-origin: the page's CSP forbids any other
- * address. The server is optional: when the app is opened without it (plain dev server, a static copy), every AI feature
- * explains that and the rest of the app works exactly as before. Nothing here is called until an AI screen is opened.
+ * The browser's only connection to the AI server (the local Worker). Everything is same-origin: the page's CSP forbids any
+ * other address. The server is optional: when the app is opened without it (plain dev server, a hosted copy), every AI
+ * feature says so and the rest of the app works exactly as before. Nothing here is called until an AI screen is opened.
+ * There is no sign-in to StudyAI itself: the local server trusts the app opened at its exact 127.0.0.1 address.
  */
 
-export type AiPhase =
-  | 'loading' // asking the server
-  | 'unavailable' // this copy of the app has no AI server
-  | 'unconfigured' // the server is there but the owner key / session secret are not set
-  | 'signed-out'
-  | 'ready';
-
-export interface AiState {
-  phase: AiPhase;
-  status?: OwnerStatus;
-}
+export type AiState = { phase: 'loading' } | { phase: 'unavailable' } | { phase: 'ready'; status: AiStatus };
 
 let state: AiState = { phase: 'loading' };
 const listeners = new Set<() => void>();
@@ -40,7 +31,7 @@ async function call(path: string, init: { method?: 'GET' | 'POST'; body?: unknow
       method: init.method ?? 'GET',
       credentials: 'same-origin',
       signal: ctl.signal,
-      ...(init.body !== undefined ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body) } : {}),
+      ...(init.method === 'POST' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body ?? {}) } : {}),
     });
     if (!/^application\/json/i.test(res.headers.get('content-type') ?? '')) return undefined;
     return { status: res.status, body: await res.json() };
@@ -51,86 +42,83 @@ async function call(path: string, init: { method?: 'GET' | 'POST'; body?: unknow
   }
 }
 
+const messageOf = (body: unknown, fallback: string): string => {
+  const m = (body as { message?: unknown } | null)?.message;
+  return typeof m === 'string' ? m : fallback;
+};
+
+/** Reads the status. Anything but a status from this server (no server, a hosted copy, a wrong address) means no AI here. */
+async function readStatus(): Promise<void> {
+  const r = await call('/api/status');
+  set(r?.status === 200 ? { phase: 'ready', status: r.body as AiStatus } : { phase: 'unavailable' });
+}
+
 let inflight: Promise<void> | undefined;
 
-/** Finds out whether there is a server, whether it is set up, and whether the owner is signed in. */
 export function refreshAi(): Promise<void> {
-  inflight ??= (async () => {
-    try {
-      const health = await call('/api/health');
-      if (!health || (health.body as { service?: unknown } | null)?.service !== 'studyai') return set({ phase: 'unavailable' });
-      const session = await call('/api/auth/session');
-      const s = session?.body as { authenticated?: boolean; configured?: boolean } | undefined;
-      if (!s) return set({ phase: 'unavailable' });
-      if (!s.configured) return set({ phase: 'unconfigured' });
-      if (!s.authenticated) return set({ phase: 'signed-out' });
-      const status = await call('/api/owner/status');
-      if (status?.status === 200) return set({ phase: 'ready', status: status.body as OwnerStatus });
-      return set({ phase: 'signed-out' });
-    } finally {
-      inflight = undefined;
-    }
-  })();
+  inflight ??= readStatus().finally(() => {
+    inflight = undefined;
+  });
   return inflight;
 }
 
-/** Only the owner status (usage, settings): cheaper than a full refresh, used after every action. */
-async function refreshStatus(): Promise<void> {
-  if (state.phase !== 'ready') return;
-  const status = await call('/api/owner/status');
-  if (status?.status === 200) set({ phase: 'ready', status: status.body as OwnerStatus });
-  else if (status?.status === 401) set({ phase: 'signed-out' });
+export type ActionResult = { ok: true } | { ok: false; error: string };
+export type ChatGptAction = 'disconnect' | 'forget' | 'resume' | { model: string };
+
+const NO_SERVER = 'StudyAI 서버에 연결하지 못했습니다. pnpm local로 실행한 창이 켜져 있는지 확인하세요.';
+
+/** Disconnect, forget the saved account, resume after a pause, or choose a model. The server validates everything again. */
+export async function chatGptAction(action: ChatGptAction): Promise<ActionResult> {
+  const [path, body] =
+    action === 'disconnect' ? ['/api/chatgpt/disconnect', { forget: false }] : action === 'forget' ? ['/api/chatgpt/disconnect', { forget: true }] : action === 'resume' ? ['/api/chatgpt/resume', {}] : ['/api/chatgpt/model', { model: action.model }];
+  const r = await call(path, { method: 'POST', body });
+  if (!r) return { ok: false, error: NO_SERVER };
+  await refreshAi();
+  return (r.body as { ok?: unknown } | null)?.ok === true ? { ok: true } : { ok: false, error: messageOf(r.body, '요청을 처리하지 못했습니다.') };
 }
 
-export type LoginResult = { ok: true } | { ok: false; message: string };
-
-export async function loginOwner(key: string): Promise<LoginResult> {
-  const r = await call('/api/auth/login', { method: 'POST', body: { key: key.trim() } });
-  if (!r) return { ok: false, message: 'Could not reach the AI server.' };
-  if (r.status === 200) {
-    await refreshAi();
+/**
+ * Starts ChatGPT sign-in and leaves for OpenAI in this same tab. A popup opened after an awaited request loses the click's
+ * user activation, and the app's opener policy would cut it off anyway. The return is a fresh load of /settings.
+ * Resolves only when the server refuses, with a Korean sentence.
+ */
+export async function connectChatGpt(o: { account: 'current' | 'other'; forceConsent: boolean }): Promise<ActionResult> {
+  const r = await call('/api/chatgpt/start', { method: 'POST', body: o });
+  if (!r) return { ok: false, error: NO_SERVER };
+  const b = r.body as { ok?: boolean; authorizeUrl?: unknown } | null;
+  if (b?.ok && typeof b.authorizeUrl === 'string' && /^https?:\/\//.test(b.authorizeUrl)) {
+    window.location.assign(b.authorizeUrl);
     return { ok: true };
   }
-  if (r.status === 429) {
-    const wait = Number((r.body as { retryAfterSec?: unknown }).retryAfterSec);
-    return { ok: false, message: `Too many wrong attempts. Try again in ${Number.isFinite(wait) ? Math.max(1, Math.ceil(wait / 60)) : 15} minutes.` };
+  return { ok: false, error: messageOf(r.body, 'ChatGPT 연결을 시작하지 못했습니다.') };
+}
+
+export type ChatGptModelsResult = { ok: true; models: ChatGptModel[]; selected: string | null } | { ok: false; error: string };
+
+/** The connected account's own model catalog. Nothing is hardcoded: the list is whatever OpenAI returns for this account. */
+export async function loadChatGptModels(): Promise<ChatGptModelsResult> {
+  const r = await call('/api/chatgpt/models', { timeoutMs: 60_000 });
+  if (!r) return { ok: false, error: NO_SERVER };
+  const b = r.body as { ok?: boolean; models?: unknown; selected?: unknown } | null;
+  await refreshAi();
+  if (b?.ok && Array.isArray(b.models)) {
+    const models = b.models.filter((m): m is ChatGptModel => !!m && typeof (m as ChatGptModel).slug === 'string' && typeof (m as ChatGptModel).displayName === 'string');
+    return { ok: true, models, selected: typeof b.selected === 'string' ? b.selected : null };
   }
-  if (r.status === 503) return { ok: false, message: 'The server is not set up yet (owner key missing).' };
-  return { ok: false, message: 'That key was not accepted.' };
+  return { ok: false, error: messageOf(r.body, '모델 목록을 불러오지 못했습니다.') };
 }
 
-export async function logoutOwner(everywhere = false): Promise<void> {
-  await call(everywhere ? '/api/auth/logout-all' : '/api/auth/logout', { method: 'POST', body: {} });
-  set({ phase: 'signed-out' });
-}
+/** The server's own ChatGPT deadline is 170 s, so it always answers first with a clean timeout. */
+const ASK_TIMEOUT_MS = 180_000;
 
-export type OwnerResult = { ok: true } | { ok: false; error: string };
-
-/** Owner actions (settings, confirmations, reconcile). The server validates everything again. */
-export async function ownerAction(path: 'config' | 'attest' | 'revoke' | 'reconcile' | 'reset-pause', body: unknown): Promise<OwnerResult> {
-  const r = await call(`/api/owner/${path}`, { method: 'POST', body });
-  if (!r) return { ok: false, error: 'Could not reach the AI server.' };
-  if (r.status === 401) {
-    set({ phase: 'signed-out' });
-    return { ok: false, error: 'You are signed out.' };
-  }
-  const b = r.body as { ok?: boolean; error?: string };
-  await refreshStatus();
-  return b.ok ? { ok: true } : { ok: false, error: b.error ?? 'The change was refused.' };
-}
-
-/** Sends one structured task. Never throws; a refusal or failure comes back with a plain-language message. */
+/** Sends one structured task. Never throws; a refusal or failure comes back with a Korean message. */
 export async function askAi(task: AiTask): Promise<AiReply> {
-  const r = await call('/api/ai/ask', { method: 'POST', body: task, timeoutMs: 120_000 });
-  if (!r) return { ok: false, code: 'network', message: 'Could not reach the AI server. Your slides were not sent anywhere unless it answered.' };
-  if (r.status === 401) {
-    set({ phase: 'signed-out' });
-    return { ok: false, code: 'signed-out', message: 'You are signed out. Sign in again in Settings.' };
-  }
-  const b = r.body as Partial<AiReply> & { error?: string };
-  void refreshStatus(); // keeps the usage numbers current; failures are harmless
+  const r = await call('/api/ai/ask', { method: 'POST', body: task, timeoutMs: ASK_TIMEOUT_MS });
+  if (!r) return { ok: false, code: 'network', message: 'AI 서버에 연결하지 못했습니다. 서버가 답하지 않았다면 슬라이드는 어디에도 보내지지 않았습니다.' };
+  void refreshAi(); // keeps the pause and connection state current; failures are harmless
+  const b = r.body as Partial<AiReply> | null;
   if (b && typeof b === 'object' && typeof b.ok === 'boolean') return b as AiReply;
-  return { ok: false, code: 'server-error', message: 'The AI server answered in an unexpected way.' };
+  return { ok: false, code: 'server-error', message: 'AI 서버가 예상하지 못한 방식으로 답했습니다.' };
 }
 
 export function useAiServer(): AiState {

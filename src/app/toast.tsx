@@ -34,7 +34,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end" role="region" aria-label="Notifications" aria-live="polite">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end" role="region" aria-label="알림" aria-live="polite">
         {items.map((t) => (
           <div
             key={t.id}
@@ -43,7 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           >
             {t.kind === 'error' ? <CircleAlert className="mt-0.5 size-4 shrink-0 text-bad" aria-hidden /> : <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-ok" aria-hidden />}
             <span className="min-w-0 flex-1 break-words">{t.message}</span>
-            <button type="button" onClick={() => dismiss(t.id)} className="-m-1 rounded p-1 text-ink-3 hover:text-ink" aria-label="Dismiss notification">
+            <button type="button" onClick={() => dismiss(t.id)} className="-m-1 rounded p-1 text-ink-3 hover:text-ink" aria-label="알림 닫기">
               <X className="size-4" aria-hidden />
             </button>
           </div>

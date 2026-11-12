@@ -13,8 +13,8 @@ export function BasisChip({ basis, sources }: { basis: Basis; sources?: SourceRe
   if (basis === 'lecture' && sources && sourceStatus(sources) !== 'verified') {
     const contradicted = sourceStatus(sources) === 'unverified';
     return (
-      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${contradicted ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn'}`} title="The item says it comes from the slides, but this app could not confirm that.">
-        {contradicted ? 'Says on the slides, not confirmed' : 'On the slides (not checked)'}
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${contradicted ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-warn'}`} title="이 항목은 슬라이드에서 왔다고 하지만 앱이 확인하지 못했습니다.">
+        {contradicted ? '슬라이드에 있다고 함, 확인 안 됨' : '슬라이드에 있음(확인 안 함)'}
       </span>
     );
   }
@@ -26,10 +26,10 @@ export function BasisChip({ basis, sources }: { basis: Basis; sources?: SourceRe
 export function SourceStatusChip({ sources }: { sources: SourceRefRow[] }) {
   const s = sourceStatus(sources);
   const map = {
-    verified: { Icon: CircleCheck, text: 'Source verified', cls: 'text-ok' },
-    'slide-only': { Icon: CircleHelp, text: 'Slide cited, quote not checked', cls: 'text-ink-2' },
-    unverified: { Icon: TriangleAlert, text: 'Quote not found on the slide', cls: 'text-bad' },
-    none: { Icon: CircleHelp, text: 'No source cited', cls: 'text-ink-3' },
+    verified: { Icon: CircleCheck, text: '출처 확인됨', cls: 'text-ok' },
+    'slide-only': { Icon: CircleHelp, text: '슬라이드만 인용, 인용문 확인 안 함', cls: 'text-ink-2' },
+    unverified: { Icon: TriangleAlert, text: '슬라이드에서 인용문을 찾지 못함', cls: 'text-bad' },
+    none: { Icon: CircleHelp, text: '인용한 출처 없음', cls: 'text-ink-3' },
   }[s];
   return (
     <span className={`inline-flex items-center gap-1 text-xs ${map.cls}`}>
@@ -46,7 +46,7 @@ export function SourceList({ sources }: { sources: SourceRefRow[] }) {
   return (
     <div className="text-sm">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="text-accent underline underline-offset-2">
-        {open ? 'Hide source' : `Show source (${sources.length})`}
+        {open ? '출처 숨기기' : `출처 보기(${sources.length})`}
       </button>
       {open && (
         <ul className="mt-2 flex flex-col gap-2">
@@ -56,15 +56,15 @@ export function SourceList({ sources }: { sources: SourceRefRow[] }) {
               <li key={i} className="rounded-[var(--radius-control)] border border-rule bg-sunken/50 px-3 py-2">
                 {lec ? (
                   <Link to={`/lecture/${lec.id}?slide=${s.slide}`} className="font-medium text-accent underline underline-offset-2">
-                    {lec.title}, slide {s.slide}
+                    {lec.title}, 슬라이드 {s.slide}
                   </Link>
                 ) : (
-                  <span className="text-ink-3">Lecture no longer in your library (slide {s.slide})</span>
+                  <span className="text-ink-3">라이브러리에 더 이상 없는 강의(슬라이드 {s.slide})</span>
                 )}
-                {lec && s.rev !== undefined && s.rev !== lec.revision && <p className="mt-1 text-[13px] text-warn">This lecture was replaced after this item was made; slide numbers may have moved.</p>}
+                {lec && s.rev !== undefined && s.rev !== lec.revision && <p className="mt-1 text-[13px] text-warn">이 항목을 만든 뒤 강의가 교체되어 슬라이드 번호가 바뀌었을 수 있습니다.</p>}
                 {s.quote && (
                   <p className="mt-1 font-serif text-[0.95rem] text-ink-2">
-                    “{s.quote}” {s.verified === true ? <span className="font-sans text-xs text-ok">verified</span> : s.verified === false ? <span className="font-sans text-xs text-bad">not found on the slide</span> : null}
+                    “{s.quote}” {s.verified === true ? <span className="font-sans text-xs text-ok">확인됨</span> : s.verified === false ? <span className="font-sans text-xs text-bad">슬라이드에서 찾지 못함</span> : null}
                   </p>
                 )}
               </li>

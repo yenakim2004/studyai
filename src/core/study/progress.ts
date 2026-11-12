@@ -146,7 +146,7 @@ export function recommendNext(i: RecommendInput): Recommendation {
   const open = i.attempts.filter((a) => a.status === 'in-progress' && course(a.courseId)).sort((a, b) => b.startedAt - a.startedAt)[0];
   if (open) {
     const exam = i.exams.find((e) => e.id === open.examId);
-    return { kind: 'resume-exam', courseId: open.courseId, title: `Finish “${exam?.config.title ?? 'your exam'}”`, reason: 'You started this exam and have not submitted it.', href: `/exam/${open.id}` };
+    return { kind: 'resume-exam', courseId: open.courseId, title: `“${exam?.config.title ?? '내 시험'}” 마치기`, reason: '시작했지만 아직 제출하지 않은 시험입니다.', href: `/exam/${open.id}` };
   }
 
   const soon = active
@@ -157,7 +157,7 @@ export function recommendNext(i: RecommendInput): Recommendation {
     const recent = i.attempts.some((a) => a.courseId === soon.id && a.status === 'submitted' && (a.submittedAt ?? 0) > i.now - 3 * DAY);
     const bank = i.questions.filter((q) => q.courseId === soon.id && q.status === 'approved').length;
     if (!recent && bank > 0) {
-      return { kind: 'practice-exam', courseId: soon.id, title: `Do a practice exam for ${soon.name}`, reason: `Your exam is ${days === 0 ? 'today' : `in ${days} day${days === 1 ? '' : 's'}`} and you have not practised in the last 3 days.`, href: `/course/${soon.id}/practice` };
+      return { kind: 'practice-exam', courseId: soon.id, title: `${soon.name} 모의시험 보기`, reason: `시험이 ${days === 0 ? '오늘' : `${days}일 뒤`}인데 최근 3일 동안 연습하지 않았습니다.`, href: `/course/${soon.id}/practice` };
     }
   }
 
@@ -166,7 +166,7 @@ export function recommendNext(i: RecommendInput): Recommendation {
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n)[0];
   if (dueByCourse) {
-    return { kind: 'review-cards', courseId: dueByCourse.c.id, title: `Review ${dueByCourse.n} due card${dueByCourse.n === 1 ? '' : 's'} in ${dueByCourse.c.name}`, reason: 'Reviewing on schedule is the cheapest way to keep what you have learned.', href: `/course/${dueByCourse.c.id}/review` };
+    return { kind: 'review-cards', courseId: dueByCourse.c.id, title: `${dueByCourse.c.name}에서 복습할 카드 ${dueByCourse.n}장 복습하기`, reason: '일정에 맞춰 복습하는 것이 배운 내용을 가장 적은 노력으로 오래 기억하는 방법입니다.', href: `/course/${dueByCourse.c.id}/review` };
   }
 
   const pending = active
@@ -174,13 +174,13 @@ export function recommendNext(i: RecommendInput): Recommendation {
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n)[0];
   if (pending) {
-    return { kind: 'approve-items', courseId: pending.c.id, title: `Check ${pending.n} imported item${pending.n === 1 ? '' : 's'} in ${pending.c.name}`, reason: 'Imported cards and questions are not used until you approve them.', href: `/course/${pending.c.id}/cards?status=pending` };
+    return { kind: 'approve-items', courseId: pending.c.id, title: `${pending.c.name}에서 가져온 항목 ${pending.n}개 확인하기`, reason: '가져온 카드와 문제는 승인하기 전까지 사용되지 않습니다.', href: `/course/${pending.c.id}/cards?status=pending` };
   }
 
   const qById = new Map(i.questions.map((q) => [q.id, q]));
   for (const c of active) {
     const w = weakTopics(i.attempts.filter((a) => a.courseId === c.id), qById, 2, 60)[0];
-    if (w) return { kind: 'revise-topic', courseId: c.id, title: `Revise “${w.topic}” in ${c.name}`, reason: `You earned ${w.percent}% of the marks on this topic in your practice exams.`, href: `/course/${c.id}/practice` };
+    if (w) return { kind: 'revise-topic', courseId: c.id, title: `${c.name}의 “${w.topic}” 다시 공부하기`, reason: `모의시험에서 이 주제의 점수를 ${w.percent}%만 받았습니다.`, href: `/course/${c.id}/practice` };
   }
 
   const unread = i.lectures
@@ -195,18 +195,18 @@ export function recommendNext(i: RecommendInput): Recommendation {
     const here = i.last?.lectureId === l.id ? Math.min(Math.max(1, i.last.slide), p.total) : undefined;
     const slide = here ?? Math.min(p.total, (seen.length ? Math.max(...seen) : 0) + 1);
     const reason = here
-      ? `You left off at slide ${here} of ${p.total}${p.viewed > 0 ? `; ${p.viewed} viewed so far` : ''}.`
+      ? `전체 ${p.total}장 중 ${here}번째 슬라이드에서 멈췄습니다${p.viewed > 0 ? `. 지금까지 ${p.viewed}장을 봤습니다` : ''}.`
       : p.viewed === 0
-        ? 'You have not opened this lecture yet.'
-        : `You have viewed ${p.viewed} of ${p.total} slides.`;
-    return { kind: 'read-lecture', courseId: l.courseId, title: `Study “${l.title}”`, reason, href: `/lecture/${l.id}?slide=${slide}` };
+        ? '아직 이 강의를 열지 않았습니다.'
+        : `전체 ${p.total}장 중 ${p.viewed}장을 봤습니다.`;
+    return { kind: 'read-lecture', courseId: l.courseId, title: `“${l.title}” 공부하기`, reason, href: `/lecture/${l.id}?slide=${slide}` };
   }
 
   if (i.lectures.length === 0) {
     const first = active[0];
-    return { kind: 'add-material', ...(first ? { courseId: first.id } : {}), title: first ? `Add lectures to ${first.name}` : 'Create your first course', reason: 'Everything starts from your PowerPoint lectures.', href: first ? `/course/${first.id}` : '/' };
+    return { kind: 'add-material', ...(first ? { courseId: first.id } : {}), title: first ? `${first.name}에 강의 추가하기` : '첫 과목 만들기', reason: '모든 학습은 PowerPoint나 PDF 강의 자료에서 시작합니다.', href: first ? `/course/${first.id}` : '/' };
   }
-  return { kind: 'all-clear', title: 'You are up to date', reason: 'Nothing is due, nothing is waiting for approval, and you have viewed every slide.', href: '/' };
+  return { kind: 'all-clear', title: '모두 따라잡았습니다', reason: '복습할 카드도, 승인을 기다리는 항목도 없고 모든 슬라이드를 봤습니다.', href: '/' };
 }
 
 /** Topics where you did well across submitted attempts (needs enough marked questions to mean something). */

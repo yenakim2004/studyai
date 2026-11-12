@@ -7,8 +7,7 @@ import { assessQuestions, type QualityReport } from './pack-quality';
 import { BASES, CARD_TYPES, NOTE_KINDS, QUESTION_TYPES, type Basis, type CardRow, type NoteRow, type QuestionRow, type SourceRefRow } from './types';
 
 /**
- * Study packs: JSON that you generate *outside* this app (for example with the Claude or Gemini
- * subscription you already pay for) from an exported lecture, then import here.
+ * Study packs: JSON generated from an exported lecture and imported here.
  * Nothing in a pack is trusted:
  *  - the file is parsed leniently (code fences and chatter are stripped) but every item is validated on its own,
  *  - lecture references are resolved to lectures in this course (by file hash, then title, or by you),
@@ -96,11 +95,11 @@ export function extractJson(text: string): unknown {
   const candidate = fenced?.[1] ?? text;
   const start = candidate.indexOf('{');
   const end = candidate.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('No JSON object found. Paste the JSON your AI produced (it should start with “{” and contain "format": "studyai-pack").');
+  if (start < 0 || end <= start) throw new Error('JSON 객체를 찾지 못했습니다. AI가 만든 JSON을 붙여 넣으세요(“{”로 시작하고 "format": "studyai-pack"을 포함해야 합니다).');
   try {
     return JSON.parse(candidate.slice(start, end + 1));
   } catch (err) {
-    throw new Error(`The JSON could not be parsed (${err instanceof Error ? err.message : 'syntax error'}). Ask the AI to return valid JSON only.`);
+    throw new Error(`JSON을 읽을 수 없습니다(${err instanceof Error ? err.message : '문법 오류'}). AI에게 올바른 JSON만 돌려 달라고 요청하세요.`);
   }
 }
 
@@ -200,10 +199,16 @@ export function sourceStatus(sources: SourceRefRow[]): SourceStatus {
 // Planning
 // ---------------------------------------------------------------------------
 
+/** Problems with where an item's evidence points, named so a caller can act on them without reading the sentence. */
+export type PlanIssueCode = 'LECTURE_UNMATCHED' | 'SLIDE_COUNT_CHANGED' | 'SOURCE_LECTURE_UNMATCHED' | 'SOURCE_SLIDE_MISSING' | 'QUOTE_NOT_FOUND' | 'LECTURE_CLAIM_UNVERIFIED' | 'MARKS_MISMATCH';
+
 export interface PlanIssue {
   severity: 'error' | 'warning';
   where: string;
   message: string;
+  code?: PlanIssueCode;
+  /** The slide a source pointed at, for a quote that was not found there. */
+  slide?: { lectureTitle: string; number: number };
   /** A marking point the finding is about: where the question sat in the list the AI wrote and which point (both 0-based). */
   fix?: { question: number; point: number };
 }
@@ -252,10 +257,10 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
   const top = packContainer.safeParse(raw);
   if (!top.success) {
     const i = top.error.issues[0];
-    return empty(`This is not a StudyAI pack (${i ? `${i.path.join('.') || 'root'}: ${i.message}` : 'invalid'}).`);
+    return empty(`StudyAI 팩이 아닙니다(${i ? `${i.path.join('.') || 'root'}: ${i.message}` : '형식 오류'}).`);
   }
   const pack = top.data;
-  if (pack.version > PACK_VERSION) return empty(`This pack uses format version ${pack.version}; this app understands up to ${PACK_VERSION}.`);
+  if (pack.version > PACK_VERSION) return empty(`이 팩은 형식 버전 ${pack.version}을(를) 사용합니다. 이 앱은 버전 ${PACK_VERSION}까지 읽을 수 있습니다.`);
 
   const issues: PlanIssue[] = [];
   const byId = new Map(lectures.map((l) => [l.id, l]));
@@ -271,10 +276,10 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
       entry.localId = hit.l.id;
       entry.how = hit.how;
       if (hit.how !== 'hash' && p.slideCount !== undefined && p.slideCount !== hit.l.slideCount) {
-        issues.push({ severity: 'warning', where: `lecture ${p.ref}`, message: `“${hit.l.title}” has ${hit.l.slideCount} slides but the pack was made from a version with ${p.slideCount}. Slide numbers may not line up; check the source badges.` });
+        issues.push({ severity: 'warning', code: 'SLIDE_COUNT_CHANGED', where: `강의 ${p.ref}`, message: `“${hit.l.title}”은(는) 슬라이드가 ${hit.l.slideCount}장인데, 팩은 ${p.slideCount}장짜리 버전으로 만들어졌습니다. 슬라이드 번호가 어긋날 수 있으니 출처 표시를 확인하세요.` });
       }
     } else {
-      issues.push({ severity: 'warning', where: `lecture ${p.ref}`, message: `No lecture in this course matches “${p.title ?? p.ref}”. Choose one below, or its items will have no verified source.` });
+      issues.push({ severity: 'warning', code: 'LECTURE_UNMATCHED', where: `강의 ${p.ref}`, message: `이 과목에 “${p.title ?? p.ref}”와(과) 일치하는 강의가 없습니다. 아래에서 강의를 고르지 않으면 해당 항목에는 확인된 출처가 없습니다.` });
     }
     return entry;
   });
@@ -293,13 +298,13 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
       const lec = localOf(s.lecture) ?? localOf(fallbackRef);
       if (!lec) {
         stats.unverified += 1;
-        issues.push({ severity: 'warning', where, message: `A source points to lecture “${s.lecture}”, which is not matched to a lecture here; it was dropped.` });
+        issues.push({ severity: 'warning', code: 'SOURCE_LECTURE_UNMATCHED', where, message: `출처가 가리키는 강의 “${s.lecture}”와(과) 일치하는 강의가 없어 출처를 뺐습니다.` });
         continue;
       }
       const text = lec.slideText(s.slide);
       if (text === undefined) {
         stats.unverified += 1;
-        issues.push({ severity: 'warning', where, message: `A source cites slide ${s.slide} of “${lec.title}”, which has only ${lec.slideCount} slides; it was dropped.` });
+        issues.push({ severity: 'warning', code: 'SOURCE_SLIDE_MISSING', where, message: `출처가 “${lec.title}”의 ${s.slide}번 슬라이드를 가리키지만 이 강의는 ${lec.slideCount}장뿐이라 출처를 뺐습니다.` });
         continue;
       }
       const ref: SourceRefRow = { lectureId: lec.id, slide: s.slide, rev: lec.revision };
@@ -311,7 +316,7 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
           if (ok) stats.verified += 1;
           else {
             stats.unverified += 1;
-            issues.push({ severity: 'warning', where, message: `The quote “${s.quote.slice(0, 60)}…” was not found on slide ${s.slide} of “${lec.title}”.` });
+            issues.push({ severity: 'warning', code: 'QUOTE_NOT_FOUND', slide: { lectureTitle: lec.title, number: s.slide }, where, message: `인용문 “${s.quote.slice(0, 60)}…”을(를) “${lec.title}”의 ${s.slide}번 슬라이드에서 찾지 못했습니다.` });
           }
         }
       }
@@ -328,7 +333,7 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
       if (!r.success) {
         stats.rejected += 1;
         const issue = r.error.issues[0];
-        issues.push({ severity: 'error', where, message: `Skipped: ${issue ? `${issue.path.join('.') || 'item'} ${issue.message}` : 'invalid'}.` });
+        issues.push({ severity: 'error', where, message: `건너뜀: ${issue ? `${issue.path.join('.') || 'item'} ${issue.message}` : '형식 오류'}.` });
         return;
       }
       try {
@@ -336,7 +341,7 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
         stats.accepted += 1;
       } catch (err) {
         stats.rejected += 1;
-        issues.push({ severity: 'error', where, message: `Skipped: ${err instanceof Error ? err.message : 'invalid'}.` });
+        issues.push({ severity: 'error', where, message: `건너뜀: ${err instanceof Error ? err.message : '형식 오류'}.` });
       }
     });
   };
@@ -347,14 +352,14 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
   const questions: QuestionRow[] = [];
   const bas = (b: Basis | undefined, hasVerified: boolean, where: string): Basis => {
     if (!b) {
-      issues.push({ severity: 'warning', where, message: 'No “basis” given (on the slides / derived / outside knowledge / uncertain); marked uncertain.' });
+      issues.push({ severity: 'warning', where, message: '“basis”가 없어(슬라이드에 있음 / 슬라이드에서 도출 / 슬라이드 밖 지식 / 불확실) 불확실로 표시했습니다.' });
       return 'uncertain';
     }
-    if (b === 'lecture' && !hasVerified) issues.push({ severity: 'warning', where, message: 'Claims to be on the slides, but no cited quote could be verified.' });
+    if (b === 'lecture' && !hasVerified) issues.push({ severity: 'warning', code: 'LECTURE_CLAIM_UNVERIFIED', where, message: '슬라이드에 있다고 하지만 인용문을 하나도 확인하지 못했습니다.' });
     return b;
   };
 
-  validated('Note', pack.notes, packNote, (n, where) => {
+  validated('노트', pack.notes, packNote, (n, where) => {
     const lec = localOf(n.lecture);
     const blocks = n.blocks.map((b) => {
       const sources = resolveSources(where, b.sources, n.lecture);
@@ -363,7 +368,7 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
     notes.push({ id: newId(), courseId, ...(lec ? { lectureId: lec.id } : {}), title: n.title, kind: n.kind ?? 'custom', blocks, createdAt: now, updatedAt: now, packId });
   });
 
-  validated('Card', pack.cards, packCard, (c, where) => {
+  validated('카드', pack.cards, packCard, (c, where) => {
     const sources = resolveSources(where, c.sources, c.lecture);
     const lec = localOf(c.lecture) ?? lectures.find((l) => l.id === sources[0]?.lectureId);
     cards.push({
@@ -392,36 +397,36 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
   const questionAsks: { asks: { quote: string; count: number }[] | undefined; askOf: (number | undefined)[] }[] = [];
   /** Where each kept question sat in the list the AI wrote, so a skipped one does not shift the plan. */
   const questionAt: number[] = [];
-  validated('Question', pack.questions, packQuestion, (q, where) => {
+  validated('문제', pack.questions, packQuestion, (q, where) => {
     const sources = resolveSources(where, q.sources, q.lectures?.[0]);
     questionWhere.push(where);
     questionAsks.push({ asks: q.asks, askOf: q.rubric.map((r) => r.ask) });
     questionAt.push(Number(/#(\d+)$/.exec(where)?.[1] ?? questionAt.length + 1) - 1);
     let options: QuestionRow['options'];
     if (q.type === 'mcq') {
-      if (!q.options || q.options.length < 2) throw new Error('a multiple-choice question needs at least two options');
-      if (!q.options.some((o) => o.correct)) throw new Error('no option is marked correct');
+      if (!q.options || q.options.length < 2) throw new Error('객관식 문제에는 보기가 두 개 이상 있어야 합니다');
+      if (!q.options.some((o) => o.correct)) throw new Error('정답으로 표시된 보기가 없습니다');
       options = q.options.map((o, i) => ({ id: `o${i + 1}`, text: o.text, correct: o.correct }));
     } else if (q.type === 'truefalse') {
       let correct = q.answer ?? q.options?.find((o) => o.correct)?.text.toLowerCase().startsWith('t');
       if (correct === undefined) {
         // A real model once wrote "modelAnswer": "True" and a one-point rubric "True" but forgot the "answer" field. That is still a clear answer.
         const said = /^\W*(true|false)\b/i.exec(q.modelAnswer ?? q.rubric[0]?.text ?? '');
-        if (!said) throw new Error('a true/false question needs "answer": true or false');
+        if (!said) throw new Error('참/거짓 문제에는 "answer": true 또는 false가 있어야 합니다');
         correct = said[1]!.toLowerCase() === 'true';
-        issues.push({ severity: 'warning', where, message: `No "answer" field was given; read as ${correct ? 'true' : 'false'} from the model answer. Check that this is right.` });
+        issues.push({ severity: 'warning', where, message: `"answer" 항목이 없어 모범 답안에서 ${correct ? '참' : '거짓'}으로 읽었습니다. 맞는지 확인하세요.` });
       }
       options = [
-        { id: 'o1', text: 'True', correct: correct === true },
-        { id: 'o2', text: 'False', correct: correct === false },
+        { id: 'o1', text: '참', correct: correct === true },
+        { id: 'o2', text: '거짓', correct: correct === false },
       ];
     }
     const rubric = q.rubric.map((r, i) => ({ id: `r${i + 1}`, text: r.text, marks: r.marks, ...(r.keywords?.length ? { keywords: r.keywords } : {}) }));
     const sum = rubric.reduce((n, r) => n + r.marks, 0);
     if (rubric.length > 0 && Math.abs(sum - q.marks) > 0.01) {
-      issues.push({ severity: 'warning', where, message: `The marking points add up to ${sum} but the question is worth ${q.marks}.` });
+      issues.push({ severity: 'warning', code: 'MARKS_MISMATCH', where, message: `채점 기준의 합은 ${sum}점인데 문제 배점은 ${q.marks}점입니다.` });
     }
-    if (!options && rubric.length === 0 && !q.modelAnswer) throw new Error('a written question needs a model answer or marking points');
+    if (!options && rubric.length === 0 && !q.modelAnswer) throw new Error('서술형 문제에는 모범 답안이나 채점 기준이 있어야 합니다');
     const lectureIds = [...new Set([...(q.lectures ?? []).map((r) => localOf(r)?.id), ...sources.map((s) => s.lectureId)].filter((x): x is string => !!x))];
     questions.push({
       id: newId(),
@@ -447,7 +452,7 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
     });
   });
 
-  if (stats.received === 0) issues.push({ severity: 'error', where: 'pack', message: 'The pack contains no notes, cards or questions.' });
+  if (stats.received === 0) issues.push({ severity: 'error', where: '팩', message: '팩에 노트, 카드, 문제가 하나도 없습니다.' });
 
   // Hold the questions to the rules they were written under. The findings are advice shown before approval; nothing is dropped.
   let quality: QualityReport | undefined;
@@ -456,9 +461,9 @@ export function planPack(raw: unknown, courseId: string, lectures: LectureContex
     quality = assessQuestions(forQuality, { slideText: (lectureId, slide) => byId.get(lectureId)?.slideText(slide) }, { expected: options.expected, existingPrompts: options.existingPrompts, positions: questionAt, requireAsks: !!options.expected && options.expected.length > 0 });
     for (const i of quality.issues) {
       const fix = i.question && i.point ? { question: questionAt[i.question - 1] ?? i.question - 1, point: i.point - 1 } : undefined;
-      issues.push({ severity: 'warning', where: i.question ? (questionWhere[i.question - 1] ?? `Question #${i.question}`) : 'Question set', message: i.message, ...(fix ? { fix } : {}) });
+      issues.push({ severity: 'warning', where: i.question ? (questionWhere[i.question - 1] ?? `문제 #${i.question}`) : '문제 세트', message: i.message, ...(fix ? { fix } : {}) });
     }
   }
-  return { packId, name: pack.name ?? pack.generator ?? 'Imported study pack', ...(pack.generator ? { generator: pack.generator } : {}), lectureMap, notes, cards, questions, questionAt, issues, stats, ...(quality ? { quality } : {}) };
+  return { packId, name: pack.name ?? pack.generator ?? '가져온 학습 팩', ...(pack.generator ? { generator: pack.generator } : {}), lectureMap, notes, cards, questions, questionAt, issues, stats, ...(quality ? { quality } : {}) };
 }
 

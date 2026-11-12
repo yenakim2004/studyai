@@ -88,14 +88,14 @@ export function retrievability(state: SchedulerState, now = Date.now(), schedule
 
 export function intervalLabel(ms: number): string {
   const m = ms / 60_000;
-  if (m < 1) return '<1m';
-  if (m < 60) return `${Math.round(m)}m`;
+  if (m < 1) return '1분 미만';
+  if (m < 60) return `${Math.round(m)}분`;
   const h = m / 60;
-  if (h < 24) return `${Math.round(h)}h`;
+  if (h < 24) return `${Math.round(h)}시간`;
   const d = h / 24;
-  if (d < 30) return `${Math.round(d)}d`;
-  if (d < 365) return `${Math.round(d / 30)}mo`;
-  return `${(d / 365).toFixed(1)}y`;
+  if (d < 30) return `${Math.round(d)}일`;
+  if (d < 365) return `${Math.round(d / 30)}개월`;
+  return `${(d / 365).toFixed(1)}년`;
 }
 
 /** A card counts as "difficult" when FSRS rates it hard to remember or it has lapsed repeatedly. */

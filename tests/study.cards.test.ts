@@ -61,7 +61,7 @@ describe('FSRS wrapper', () => {
     expect(p[4].due).toBeGreaterThan(p[3].due);
     expect(p[3].due).toBeGreaterThanOrEqual(p[2].due);
     expect(p[2].due).toBeGreaterThan(p[1].due);
-    expect(p[3].label).toMatch(/^\d+(d|mo)$/);
+    expect(p[3].label).toMatch(/^\d+(일|개월)$/);
   });
 
   it('retrievability falls as time passes and is ~90% at the due date', () => {
@@ -78,7 +78,7 @@ describe('FSRS wrapper', () => {
   it('state survives JSON (backups) and labels intervals readably', () => {
     const s = reviewCard(newSchedulerState(T0), 3, T0, det);
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
-    expect([intervalLabel(30_000), intervalLabel(10 * 60_000), intervalLabel(5 * 3_600_000), intervalLabel(3 * DAY), intervalLabel(90 * DAY), intervalLabel(400 * DAY)]).toEqual(['<1m', '10m', '5h', '3d', '3mo', '1.1y']);
+    expect([intervalLabel(30_000), intervalLabel(10 * 60_000), intervalLabel(5 * 3_600_000), intervalLabel(3 * DAY), intervalLabel(90 * DAY), intervalLabel(400 * DAY)]).toEqual(['1분 미만', '10분', '5시간', '3일', '3개월', '1.1년']);
   });
 
   it('flags difficult cards', () => {
@@ -95,10 +95,10 @@ describe('card store', () => {
     const course = await createCourse(db, { name: 'C' });
     const c = await createCard(db, { courseId: course.id, type: 'qa', front: ' What is P? ', back: 'Poly time', basis: 'lecture' }, T0);
     expect(c).toMatchObject({ front: 'What is P?', status: 'approved', origin: 'user', fsrs: { state: 0 } });
-    await expect(createCard(db, { courseId: course.id, type: 'qa', front: '', back: 'x' })).rejects.toThrow(/front and a back/);
+    await expect(createCard(db, { courseId: course.id, type: 'qa', front: '', back: 'x' })).rejects.toThrow(/앞면과 뒷면이 모두 있어야 합니다/);
     await updateCard(db, c.id, { back: 'Polynomial time' }, T0 + 1);
     expect((await db.cards.get(c.id))!.back).toBe('Polynomial time');
-    await expect(updateCard(db, c.id, { front: '  ' })).rejects.toThrow(/front and a back/);
+    await expect(updateCard(db, c.id, { front: '  ' })).rejects.toThrow(/앞면과 뒷면이 모두 있어야 합니다/);
     await setCardStatus(db, [c.id], 'rejected', T0 + 2);
     expect((await db.cards.get(c.id))!.status).toBe('rejected');
     await deleteCards(db, [c.id]);
@@ -115,7 +115,7 @@ describe('card store', () => {
     const log = await db.reviews.toArray();
     expect(log).toHaveLength(1);
     expect(log[0]).toMatchObject({ cardId: ok.id, courseId: course.id, rating: 3, stateBefore: 0, durationMs: 4322 });
-    await expect(answerCard(db, pending.id, 3, 1000, T0)).rejects.toThrow(/Only approved cards/);
+    await expect(answerCard(db, pending.id, 3, 1000, T0)).rejects.toThrow(/승인된 카드만 복습할 수 있습니다/);
     await resetCardSchedule(db, ok.id, T0 + 5);
     expect((await db.cards.get(ok.id))!.fsrs).toMatchObject({ state: 0, reps: 0 });
   });
@@ -198,7 +198,7 @@ describe('local card drafts (no AI)', () => {
     const { cards, slidesScanned } = draftCardsFromLecture(lecture, slides);
     expect(slidesScanned).toBe(3);
     expect(cards.map((c) => c.type)).toEqual(['definition', 'comparison']);
-    expect(cards[0]).toMatchObject({ front: 'What is **Decidable language**?', status: 'pending', origin: 'auto', basis: 'lecture' });
+    expect(cards[0]).toMatchObject({ front: '**Decidable language**(이)란 무엇인가요?', status: 'pending', origin: 'auto', basis: 'lecture' });
     expect(cards[0]!.back).toMatch(/^a language for which some Turing machine halts/);
     expect(cards[0]!.sources![0]!).toMatchObject({ slide: 1, verified: true, rev: 1 });
     expect(cards[1]!.back).toContain('| NP | poly | unknown |');

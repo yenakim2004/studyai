@@ -1,108 +1,106 @@
 # StudyAI
 
-[![CI](https://github.com/zuhairhalawa/studyai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zuhairhalawa/studyai/actions/workflows/ci.yml) [![Security](https://github.com/zuhairhalawa/studyai/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/zuhairhalawa/studyai/actions/workflows/codeql.yml)
+[![CI](https://github.com/yenakim2004/studyai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yenakim2004/studyai/actions/workflows/ci.yml) [![보안 검사](https://github.com/yenakim2004/studyai/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/yenakim2004/studyai/actions/workflows/codeql.yml)
 
-A local-first study platform for university lectures. Drop in your PowerPoint files, read them slide by slide beside the text the app extracted, search everything, study with spaced-repetition flashcards and practice exams, and, only if you choose, ask an AI tutor that answers from your own slides and says which slide each point comes from.
+**PPTX·PDF 강의 자료를 넣고, 한국어로 공부하는 학습 도우미입니다.** 자료 보기와 검색, 노트, 플래시카드, 모의시험을 한곳에서 사용할 수 있습니다. 내 컴퓨터에서 실행하면 내 ChatGPT 플랜을 연결해 자료를 근거로 설명을 듣고 문제를 만들 수 있습니다.
 
-Your lectures and study data stay in your browser. The study app needs no account and makes no third-party requests. The AI tutor is an optional add-on that you run yourself on Cloudflare's free plan with your own Google Gemini free-tier key; nothing is sent anywhere until you have confirmed what will be sent.
+강의 파일과 학습 기록은 브라우저에 저장됩니다. StudyAI 자체 로그인이나 Owner key는 없습니다. AI에 질문할 때는 보낼 텍스트와 출처를 먼저 보여 줍니다.
 
-![A course with three lectures imported](docs/screenshots/course.png)
+## 실행 방식 고르기
 
-## What it does
+| | 내 컴퓨터에서 사용 | Sites에 웹 앱으로 배포 |
+|---|---|---|
+| 실행·빌드 | `pnpm local` | `pnpm build:sites` |
+| PPTX·PDF 보기와 검색 | 가능 | 가능 |
+| 노트·카드·모의시험·백업 | 가능 | 가능 |
+| 내 ChatGPT 플랜으로 AI 사용 | 설정에서 연결 후 가능 | 이 버전에서는 지원하지 않음 |
+| 자료 저장 | 해당 주소의 브라우저 저장소 | 방문자별 브라우저 저장소 |
+| 서버에 강의 저장·기기 간 동기화 | 없음 | 없음 |
 
-* **Reads PowerPoint files faithfully.** Text, tables, charts, SmartArt, speaker notes, and equations (converted to LaTeX and drawn with KaTeX). Pictures whose words cannot be extracted are flagged, and you can type their words in. An extraction report says what was and was not understood.
-* **Lets you check it against the original.** The slide is drawn beside the extracted text, with search across all lectures.
-* **Studies with you.** Flashcards with FSRS spaced repetition, notes, practice exams with marking points, progress, and a backup ZIP of everything.
-* **Understands what kind of lecture it is.** A lecture with proofs, machines, formulas, pseudocode or attack scenarios gets questions of that kind (a proof, the run of a machine, a calculation), not generic ones. The exam plan follows your professor's stated style ("mostly scenarios, short answers, proofs where they fit").
-* **Checks AI output instead of trusting it.** Every quote a model cites is looked up on the real slide; every exam question is checked on the device for padded marks, marking points nobody asked for, a "scenario" that only restates the slide, and a model answer that would not earn full marks. Nothing is used until you approve it.
-* **Says what the slides do not say.** The tutor is told about headings with no content, pictures it cannot read, formulas with undefined symbols, questions a slide asks without answering, and diagrams whose meaning sits in their layout. Anything beyond the slides is labelled "Beyond the slides".
-* **Can write study packs with your Claude Code subscription** (the `lecture-pack` skill and command-line tool in this repository), or from any AI chat, with no API at all.
+Sites의 사이트 접근 로그인과 ChatGPT 플랜으로 모델을 호출하는 권한은 별개입니다. 배포 사이트에 접속했다고 AI 튜터가 자동으로 연결되지는 않습니다.
 
-![A proof slide next to the extracted text](docs/screenshots/lecture.png)
+## 설치하고 바로 시작하기
 
-| Importing a study pack: every cited quote is checked | The same app on a phone |
-|---|---|
-| ![Study pack import with quote checks](docs/screenshots/pack-check.png) | ![The lecture viewer on a phone](docs/screenshots/phone.png) |
-
-The screenshots show invented lectures from `tests/fixtures/`; no real course material is in this repository.
-
-## Quick start (no AI, no account)
-
-Requirements: Node 22 or newer and pnpm 11.
+준비물은 **Node.js 22 이상**, **Git**, 최신 브라우저입니다. 아래 명령은 pnpm을 전역에 설치하지 않아도 실행되며, 프로젝트에 맞는 pnpm 11.28.11을 사용합니다. 처음 설치할 때는 인터넷 연결이 필요합니다.
 
 ```bash
-git clone https://github.com/zuhairhalawa/studyai.git
+git clone https://github.com/yenakim2004/studyai.git
 cd studyai
-pnpm install        # exact, pinned versions
-pnpm dev            # http://localhost:5173
+npx --yes pnpm@11.28.11 install --frozen-lockfile
+npx --yes pnpm@11.28.11 local
 ```
 
-Create a course, drop in a `.pptx` file (`.pptm`, `.ppsx` and `.potx` also work; an old `.ppt` must first be saved as `.pptx` in PowerPoint), and open it. The AI screens say "AI is not available here" until you set up the optional server below.
+1. 터미널에 표시된 **http://127.0.0.1:8790**을 여세요. 터미널은 켜 둡니다.
+2. **과목 만들기**를 누르고 강의 파일을 추가하세요.
+3. AI도 사용하려면 **설정과 백업 → AI 학습 도우미 → ChatGPT로 계속하기**를 누르세요. OpenAI에서 허용한 뒤 설정으로 돌아와 사용할 모델을 고릅니다.
+4. 과목의 **AI 튜터**에서 질문과 함께 보낼 자료를 확인하고 보내세요.
 
-**Where your data lives.** Your library is stored in your browser, for the exact address you opened (here `http://localhost:5173`). A different port, browser or browser profile is a different, empty library, which is why the dev server stops with an error instead of quietly moving to another port when 5173 is busy (use `pnpm dev --port <n>` to choose one on purpose). Use **Export backup** under *Backup and restore* in Settings to keep a copy or to move your library.
+AI를 연결하지 않아도 자료 보기와 학습 기능은 동작합니다. 이미 연결한 계정은 다음 실행 때 이어집니다. 종료는 실행한 터미널에서 `Ctrl+C`, 다시 시작할 때는 `studyai` 폴더에서 마지막 명령만 실행하면 됩니다. 별도로 `.env`를 만들거나 토큰을 복사할 필요가 없습니다.
 
-**Production headers.** `pnpm dev` is the development server and does not send the production security headers (the Content-Security-Policy and the others). To run the production build with them, use `pnpm build` and then `pnpm preview`.
+이미 pnpm 11.28.11이 있다면 이후 명령의 `npx --yes pnpm@11.28.11` 대신 `pnpm`을 쓸 수 있습니다. 저장소는 `packageManager`에 이 버전을 고정합니다.
 
-## Optional: the AI tutor on the Gemini free tier
+### 문제가 생겼을 때
 
-The AI features run in a small Cloudflare Worker that **you** run, with **your** keys. This repository contains no key, no hostname and no access to anyone's deployment.
+| 증상 | 확인할 것 |
+|---|---|
+| `node` 또는 `npx`를 찾지 못함 | Node.js 22 이상을 설치하고 새 터미널을 여세요. `node --version`으로 확인합니다. |
+| pnpm 설정·lockfile 오류 | 위의 버전 고정 명령으로 설치하세요. 오래된 전역 pnpm을 쓰지 마세요. |
+| 8790 포트가 사용 중 | 이미 실행한 StudyAI 창이 있는지 확인하고 중복 실행을 종료하세요. |
+| AI 연결이 안 됨 | `localhost` 대신 터미널에 나온 `127.0.0.1` 주소로 여세요. `pnpm dev`와 정적 배포에는 AI 서버가 없습니다. |
+| 자료가 갑자기 없어 보임 | 주소, 포트, 브라우저 프로필이 바뀌면 다른 자료실입니다. 원래 주소로 돌아가 백업을 내보낸 뒤 새 주소에서 복원하세요. |
+| PDF에 글이 없다고 나옴 | 스캔 PDF는 페이지 그림으로 표시합니다. 자동 OCR은 없으며, 필요한 글은 직접 입력할 수 있습니다. |
 
-1. In [Google AI Studio](https://aistudio.google.com/) create an API key in a project that shows **Free tier** and **No billing account**. Do not add billing: the app is designed to run at $0, and it refuses to turn AI on until you have confirmed this.
-2. Create your local secrets (they go in a git-ignored `.dev.vars` file, never in the repository):
+연결 해제, 저장 위치와 보안 설명은 [ChatGPT 연결 안내](docs/CHATGPT.md)를 보세요.
 
-   ```bash
-   pnpm owner:keygen --write-dev-vars   # prints your owner key ONCE and writes the server secrets
-   ```
+## Sites로 배포하기
 
-   Then put your Gemini key in `.dev.vars` as `GEMINI_API_KEY=` (see [.dev.vars.example](.dev.vars.example)).
-3. Run everything locally and open it:
+ChatGPT 또는 Codex에서 Sites를 선택하고 다음처럼 요청하세요.
 
-   ```bash
-   pnpm worker:dev                      # builds the app and serves it with the Worker at http://localhost:8787
-   ```
+```text
+@Sites https://github.com/yenakim2004/studyai 를 배포해 줘.
+README.md와 docs/SITES.md를 따라 pnpm build:sites로 빌드하고,
+dist를 정적 사이트로 게시해 줘. 각 방문자의 강의와 학습 기록은
+브라우저에 저장하고, 로컬 전용 ChatGPT 연결은 포함하지 마.
+```
 
-4. Open **Settings → AI tutor**, sign in with the owner key, and follow the checklist: confirm the free-tier facts, approve the first request, turn AI on.
+배포 빌드는 사이트 루트 경로용 파일, 한국어 메타데이터, PDF 처리 Worker·글꼴·문자 맵·이미지 디코더, 보안 정책과 깊은 주소용 `404.html`을 만듭니다. AI 통신 모듈과 데모용 가상 과목은 배포 번들에서 제외합니다. D1, R2, API 키, 로컬 계정 파일은 필요하지 않습니다.
 
-A fail-closed budget guard sits between the app and the model: daily and monthly spend caps, a request cap, and a stop whenever the billing state is unclear. Free-tier content may be used by Google to improve its products, so send only material you are comfortable sharing. How the guard works: [docs/FINANCIAL-SAFETY.md](docs/FINANCIAL-SAFETY.md).
-
-To put your own copy online (also free), see [docs/DEPLOY.md](docs/DEPLOY.md). A deployed copy is private by default: every page and endpoint answers only a sign-in page until the owner signs in.
-
-## Security and privacy
-
-* **Local first.** Lectures, notes, flashcards, exams and progress live in IndexedDB on your device. A test enforces that the study app makes no third-party requests; the Content-Security-Policy allows connections to the app's own origin only.
-* **Your keys, your deployment.** Nothing in this repository lets anyone use someone else's deployment. The AI endpoints need the owner's key (256-bit, signed cookies, CSRF and host checks, login lockout), and a deployment answers only the hosts its own owner configured. A clone has to be given its own keys.
-* **Untrusted input is treated as untrusted.** PowerPoint files, study packs and model output are validated (size, ZIP-bomb and XML-entity limits, escaped prompts, strict JSON, quote checks) and wait for your approval.
-* **Secrets** exist only as Cloudflare secrets or in `.dev.vars`. `pnpm scan:secrets` checks the working tree and the whole git history.
-
-Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
-
-## Development
+직접 빌드 결과를 확인하려면 다음을 실행하세요.
 
 ```bash
-pnpm check                  # types, Worker types, unit tests and browser tests, in order (needs Chrome)
-pnpm test                   # unit and integration tests only
-pnpm scan:secrets           # secret scan: working tree and full history
-pnpm build                  # production build
-pnpm notices                # regenerate THIRD-PARTY-NOTICES.md
+npx --yes pnpm@11.28.11 build:sites
+npx --yes pnpm@11.28.11 preview:sites
 ```
 
-The browser tests run the real local Worker and Durable Object with a scripted fake Gemini: no network, no account, no real AI request. If your system reserves their ports, set `STUDYAI_E2E_PORT_BASE` (see [CONTRIBUTING.md](CONTRIBUTING.md)). `STUDYAI_SCREENSHOTS=1 pnpm exec playwright test screenshots --project=desktop` regenerates the screenshots above from synthetic lectures.
+미리보기 주소는 **http://127.0.0.1:4174**입니다. 이 명령은 로컬 빌드와 확인이며 실제 게시가 아닙니다. Sites 프로젝트 생성, 배포 설정과 확인 항목은 [Sites 배포 안내](docs/SITES.md)에 있습니다. GitHub에 코드를 푸시하는 것만으로 Sites에 게시되지는 않습니다.
 
-| Path | What |
-|---|---|
-| `src/core/pptx/` | The PowerPoint engine: safe ZIP/XML, text, tables, charts, SmartArt, equations, notes, report |
-| `src/core/study/` | Study packs and quote verification, flashcards, exams, the exam planner and the question checks |
-| `src/core/tutor/` | What the browser may ask the AI, server-side prompts, strict parsers, slide context, teaching gaps |
-| `src/core/ai/`, `worker/` | The budget guard and the Cloudflare Worker with its Durable Object |
-| `src/ui/`, `src/pages/` | The React interface |
-| `src/cli/`, `.claude/skills/lecture-pack/` | The command-line tool and the Claude Code skill |
-| `tests/` | Unit, integration and browser tests, with a PowerPoint fixture builder (all lectures invented) |
-| `docs/` | Architecture, decisions, financial safety, deployment |
+## 학습 기능
 
-## Contributing
+- **자료 보기와 검색.** PPTX의 글, 표, 차트, 발표자 노트, 수식을 읽고 PDF는 쪽별 그림과 텍스트를 함께 보여 줍니다. 읽지 못한 부분은 추출 보고서에 표시합니다.
+- **복습.** 노트와 FSRS 간격 반복 플래시카드, 채점 기준이 있는 모의시험, 학습 진도를 제공합니다. 자료에서 만든 초안과 AI가 만든 항목은 검토 후 승인합니다.
+- **근거 확인.** AI가 인용한 문장을 강의에서 찾아 확인하고, 자료 밖의 설명과 불확실한 내용을 구분합니다. 질문 생성과 채점은 한국어를 기본으로 요청하며 원문 자료는 번역하거나 바꾸지 않습니다.
+- **화면 공간.** 왼쪽 사이드바를 접고 펼칠 수 있습니다. 컴퓨터에서는 선택을 기억하고, 휴대폰에서는 메뉴 서랍을 사용합니다.
+- **백업과 복원.** 설정에서 강의와 학습 기록을 ZIP으로 내보내거나 복원합니다. 브라우저 데이터 삭제에 대비해 정기적으로 백업하세요. 백업에는 ChatGPT 인증 정보가 들어가지 않습니다.
 
-Contributions are welcome; please read [CONTRIBUTING.md](CONTRIBUTING.md) first. In short: a defect gets a test that fails without the fix, a new rule gets a test for what it finds and for what it must leave alone, and no lecture slides, study packs, keys or personal data belong in an issue or a pull request.
+지원 파일은 `.pptx`, `.pptm`, `.ppsx`, `.potx`, `.pdf`입니다. 오래된 `.ppt`는 PowerPoint에서 `.pptx`로 다시 저장하세요. PDF의 다단 편집, 표와 수식은 읽는 순서나 텍스트가 원본과 다를 수 있습니다. 스캔 PDF에는 자동 OCR이 없습니다.
 
-## License
+## 개발과 검증
 
-[MIT](LICENSE). The open-source packages the app ships are listed with their licenses in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Course material belongs to its authors and is not part of this project; use only lectures you have the right to study. StudyAI is not affiliated with Google, Microsoft, Cloudflare or Anthropic. Parts of the code were written with Claude's help.
+```bash
+pnpm dev                  # AI 없는 개발 서버, http://localhost:5173
+pnpm build                # 로컬 Worker와 함께 쓸 운영 빌드
+pnpm typecheck:worker     # Worker 타입 검사
+pnpm test                 # 단위·통합 테스트
+pnpm check                # 빌드, Worker 타입, 단위·브라우저 테스트
+pnpm test:e2e:sites        # 정적 배포 빌드의 PDF·사이드바·설정 흐름
+pnpm scan:secrets          # 작업 트리와 git 기록의 비밀 값 검사
+pnpm check:attribution    # 커밋의 자동 생성 서명 검사
+```
+
+브라우저 테스트에는 Chrome이 필요합니다. 테스트는 가상 강의와 가짜 OpenAI 서버를 사용하며 실제 계정에 요청하지 않습니다. `STUDYAI_E2E_PORT_BASE`로 테스트 포트를 바꿀 수 있습니다. 자세한 개발 절차는 [기여 안내](CONTRIBUTING.md), 공개 예제용 GitHub Pages 배포는 [데모 안내](docs/DEMO.md)를 참고하세요.
+
+## 보안과 라이선스
+
+`.studyai-local/`에는 로컬 ChatGPT 연결 상태와 암호화 키가 있습니다. 이 폴더를 git, 배포 파일, 다른 사람에게 전달하는 ZIP에 넣지 마세요. 로컬 서버는 같은 컴퓨터의 프로그램이 사용할 수 있으므로 인터넷 터널로 공개하지 마세요. 자세한 내용은 [보안 안내](SECURITY.md)에 있습니다.
+
+코드는 [MIT](LICENSE), 포함된 라이브러리는 [오픈소스 고지](THIRD-PARTY-NOTICES.md)를 따릅니다. 강의 자료의 권리는 저자에게 있습니다. 이 저장소에는 합성한 테스트 자료만 포함하며 실제 강의와 계정 정보는 포함하지 않습니다.

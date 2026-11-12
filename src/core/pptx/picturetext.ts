@@ -61,7 +61,7 @@ export function withPictureText(slide: SlideData, elementId: string, raw: string
       return done ? { ...rest, resolved: true } : rest;
     });
   if (entries.length > 0) {
-    flags.push({ code: 'PICTURE_TEXT_ADDED', severity: 'info', slide: slide.index, message: 'You typed the text of a picture on this slide. It is used as study text and marked as typed by you.' });
+    flags.push({ code: 'PICTURE_TEXT_ADDED', severity: 'info', slide: slide.index, message: '이 슬라이드에 있는 그림의 글자를 직접 입력했습니다. 학습 텍스트로 쓰이며 내가 입력한 것으로 표시됩니다.' });
   }
 
   const base = textWithoutPictureBlock(slide.text);

@@ -11,7 +11,7 @@ test('a theory lecture is read and drawn: symbols, exponents and subscripts, the
   await page.goto('/');
   await createCourse(page, 'Computability', 'CS301');
   await importFiles(page, [{ name: 'Computability and complexity.pptx', buffer: Buffer.from(computabilityDeck()) }]);
-  await expect(page.getByText(/Imported: 15 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 15장/)).toBeVisible();
   await page.locator('a[href*="/lecture/"]').first().click();
   const id = page.url().match(/\/lecture\/([^/?#]+)/)![1]!;
   const content = page.getByRole('tabpanel');
@@ -41,19 +41,19 @@ test('a theory lecture is read and drawn: symbols, exponents and subscripts, the
 
   // the state diagram is a picture: the report says so, and typing its words makes it part of the lecture
   await page.goto(`/lecture/${id}/report`);
-  await expect(page.getByText(/Picture that may hold text or a diagram \(not read automatically\)/)).toBeVisible();
+  await expect(page.getByText(/텍스트나 도식이 들어 있을 수 있는 그림\(자동으로 읽지 않음\)/)).toBeVisible();
   await page.goto(`/lecture/${id}?slide=5`);
-  await page.getByLabel('Words in this picture').fill('two circles q0 and q1; q0 has a double ring and an arrow in; q0 to q1 labelled 0; q1 to q0 labelled 0; each state loops on 1');
-  await page.getByRole('button', { name: 'Save text' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Saved.' }).first()).toBeVisible();
+  await page.getByLabel('이 그림 속 글자').fill('two circles q0 and q1; q0 has a double ring and an arrow in; q0 to q1 labelled 0; q1 to q0 labelled 0; each state loops on 1');
+  await page.getByRole('button', { name: '텍스트 저장' }).click();
+  await expect(page.getByRole('status').filter({ hasText: '저장했습니다.' }).first()).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Words in this picture')).toHaveValue(/q0 to q1 labelled 0/);
+  await expect(page.getByLabel('이 그림 속 글자')).toHaveValue(/q0 to q1 labelled 0/);
   await expect(content).toContainText('q0 (start, accept)');
   await page.screenshot({ path: testInfo.outputPath('computability-diagram.png'), fullPage: true });
 
   // search finds a definition by its words
   await page.goto('/');
-  const search = page.getByLabel('Search all lectures');
+  const search = page.getByLabel('모든 강의 검색');
   await search.fill('pumping length');
   await search.press('Enter');
   await expect(page.getByRole('link', { name: /pumping lemma/i }).first()).toBeVisible();

@@ -1,34 +1,26 @@
 {
-  // StudyAI Worker. No secret belongs in this file. Secrets are Cloudflare secrets (production) or .dev.vars (local, git-ignored):
-  //   GEMINI_API_KEY, OWNER_KEY_HASH, SESSION_SECRET, ALLOWED_HOSTS
-  // (ALLOWED_HOSTS is a secret only so that no hostname of yours is committed to a public repository.)
+  // StudyAI Worker. No secret belongs in this file. `pnpm local` passes STUDYAI_LOOPBACK and CHATGPT_SEAL_KEY through
+  // an env file under .studyai-local/ (git-ignored). A hosted copy gets neither, so it serves the study app with no AI.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "studyai",
   "main": "worker/src/index.ts",
   "compatibility_date": "2026-09-01",
-
-  // Private first: the site is reachable on a *.workers.dev address, but the whole site (not just the API) answers only a
-  // sign-in page until the owner signs in. When a custom domain is attached, set this to false. Preview URLs stay off.
   "workers_dev": true,
   "preview_urls": false,
 
-  // run_worker_first=true sends EVERY request through the Worker so the private-site gate can check the owner's session
-  // before a static file is served (code: worker/src/gate.ts, handleSite in app.ts). Do not change it to ["/api/*"] while
-  // PRIVATE_SITE is "on": that would serve the files to anyone (a test checks this).
+  // Only the API and the OAuth callback run the Worker. The static files hold no private data: the library lives in the
+  // browser, and the ChatGPT account is reachable only through the loopback-checked API (worker/src/loopback.ts).
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": true
+    "run_worker_first": ["/api/*", "/auth/*"]
   },
 
-  // One Durable Object (SQLite-backed, available on the free plan) holds the spend ledger, settings and login throttle.
+  // One Durable Object (SQLite-backed) holds the ChatGPT sign-in. Its class, binding and migration tag address existing
+  // local state: renaming any of them would lose the connected account.
   "durable_objects": { "bindings": [{ "name": "STUDYAI", "class_name": "StudyAiDO" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["StudyAiDO"] }],
 
-  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
-
-  // "on" = the whole site is private. Anything except "off" counts as on. "off" is only for a public copy of the app
-  // (together with run_worker_first ["/api/*"]); the AI endpoints always need the owner either way.
-  "vars": { "PRIVATE_SITE": "on" }
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ScriptedGemini } from '../worker/src/scripted-gemini';
+import { scriptedPack } from './helpers/scripted-pack';
 import { parsePptx } from '../src/core/pptx';
 import type { SlideData } from '../src/core/pptx/model';
 import { withPictureText } from '../src/core/pptx/picturetext';
@@ -77,9 +77,8 @@ async function load(spec: DeckSpec, picture?: { slide: number; text: string }) {
 async function ask(group: readonly Slot[], lecture: Awaited<ReturnType<typeof load>>, alreadyAsked: string[] = []): Promise<PackPlan> {
   const planned: PlannedSlot[] = group.map(({ n: _n, ...rest }) => rest);
   const task = AiTaskSchema.parse({ task: 'generate', lectureMarkdown: lecture.markdown(lecture.slides), wants: { notes: false, cards: false, questions: true }, amount: 'normal', blueprint: planned, ...(alreadyAsked.length ? { alreadyAsked } : {}) });
-  const { request } = buildAiRequest(task, 'gemini-3.1-flash-lite', 4_000);
-  const outcome = await new ScriptedGemini().complete({ model: request.model, maxOutputTokens: request.maxOutputTokens, messages: request.messages, ...(request.system ? { system: request.system } : {}) }, new AbortController().signal);
-  if (outcome.kind !== 'ok') throw new Error('the scripted model did not answer');
+  const { request } = buildAiRequest(task, 'test-model', 4_000);
+  const outcome = { text: scriptedPack(request) };
   return planPack(JSON.parse(outcome.text), 'course', [lecture.ctx], {}, 0, { expected: planned, existingPrompts: alreadyAsked });
 }
 

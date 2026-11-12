@@ -1,63 +1,52 @@
-# Security policy
+# 보안 정책
 
-## Reporting a vulnerability
+## 취약점 알리기
 
-Please report vulnerabilities **privately** using GitHub's private vulnerability reporting on this repository:
-open the **Security** tab, choose **Report a vulnerability**, and describe the problem. There is no email address for
-security reports.
+취약점은 이 저장소의 GitHub 비공개 취약점 신고로 **비공개로** 알려 주세요. **Security** 탭을 열고 **Report a vulnerability**를 고른 뒤 문제를 설명하면 됩니다. 보안 신고용 이메일 주소는 없습니다.
 
-Please do not open a public issue, discussion or pull request for a suspected vulnerability, and do not include real
-secrets, personal data or copyrighted lecture material in a report.
+의심되는 취약점을 공개 이슈, 토론, 풀 리퀘스트로 올리지 마세요. 신고에 실제 비밀 값, 개인정보, 저작권이 있는 강의 자료를 넣지 마세요.
 
-A useful report contains:
+도움이 되는 신고에는 다음이 들어 있습니다.
 
-* what you found and which guarantee below it breaks;
-* the commit or version, and the steps to reproduce (a minimal test case or request is ideal);
-* the impact as you understand it.
+* 무엇을 찾았고 아래 보장 가운데 무엇이 깨지는지
+* 커밋이나 버전, 재현 방법(최소 테스트나 요청이 가장 좋습니다)
+* 이해한 범위에서의 영향
 
-This is a small project maintained on a best-effort basis. Reports are acknowledged when the maintainer can, with no
-guaranteed response time and no bounty. Please allow time for a fix before disclosing details publicly.
+작은 프로젝트라서 여유가 있을 때 관리합니다. 응답 시간 보장이나 포상은 없습니다. 자세한 내용을 공개하기 전에 고칠 시간을 주세요.
 
-## Supported versions
+## 지원하는 버전
 
-| Version | Supported |
+| 버전 | 지원 |
 |---|---|
-| `main` (latest commit) | Yes |
-| Any earlier commit or tag (the project is pre-1.0) | No, update to `main` |
+| `main` (최신 커밋) | 예 |
+| 그 이전 커밋이나 태그 (1.0 이전 프로젝트) | 아니요, `main`으로 업데이트하세요 |
 
-## What the project guarantees
+## 프로젝트가 지키는 것
 
-These are the security properties the project is designed to keep. A way to break one of them is a vulnerability.
+아래 성질을 깨는 방법은 취약점입니다.
 
-* **Local-first.** Lectures, notes, flashcards, exams and progress are stored in the browser on the user's own device
-  (IndexedDB). The study features work without an account and without any AI service.
-* **No telemetry.** No analytics, tracking or third-party requests. The Content-Security-Policy limits network
-  connections to the app's own origin, and an automated test enforces this.
-* **Secrets only in Cloudflare secrets.** Credentials (the AI provider key, the owner key hash, the session secret)
-  exist only as Cloudflare secrets in production and in an untracked `.dev.vars` file during local development. They
-  are never committed, never present in git history, and never sent to the browser. `pnpm scan:secrets` checks the
-  working tree and the full history for this.
-* **Owner-only AI endpoint.** AI features are reachable only by the owner of a deployment, authenticated by the owner
-  key. Requests from anyone else are rejected, and lecture content is sent to an AI service only as the result of an
-  explicit action by the owner.
-* **Budget guard.** Every AI call must pass a fail-closed guard that enforces owner-set limits. If a limit, price,
-  confirmation or counter is missing, stale, unreadable or inconsistent, AI is switched off and the offline study
-  features keep working. See [docs/FINANCIAL-SAFETY.md](docs/FINANCIAL-SAFETY.md).
-* **Hostile input is expected.** PowerPoint files and study packs are treated as untrusted. Bypassing the documented
-  protections (ZIP and XML limits, XSS and HTML sanitising, quote verification) is in scope.
+* **로컬 우선.** 강의, 노트, 플래시카드, 시험, 진도는 사용자 기기의 브라우저(IndexedDB)에 저장됩니다. 학습 기능은 계정도 AI 서비스도 없이 동작합니다.
+* **원격 수집 없음.** 분석, 추적, 다른 사이트 요청이 없습니다. Content-Security-Policy가 네트워크 연결을 앱 자신의 주소로 제한하고, 자동 테스트가 이를 확인합니다.
+* **AI는 내 컴퓨터의 서버에서만.** AI 경로는 `pnpm local`이 `STUDYAI_LOOPBACK`을 정확히 `127.0.0.1:<포트>`로 넘긴 서버에만 있습니다. 이 값이 없는 사본(인터넷에 올린 사본 포함)은 상태 확인(`/api/health`) 말고는 모든 AI 경로를 Durable Object에 닿기 전에 거절합니다. 그래서 공유된 ChatGPT 계정이 원격 사본에서 노출되지 않습니다.
+* **로컬 API의 경계.** 키나 로그인 대신 요청 자체를 확인합니다. `Host` 헤더와 URL 호스트가 정확히 `127.0.0.1:<포트>`여야 합니다(DNS 리바인딩 차단). `Sec-Fetch-Site`가 있으면 `same-origin`이어야 하고, `Origin`이 있으면 정확히 `http://127.0.0.1:<포트>`여야 합니다(다른 사이트와 같은 컴퓨터의 다른 포트 차단). POST에는 `Origin`이 반드시 있어야 하고 본문은 JSON이어야 하므로, 다른 사이트의 폼이나 단순 요청은 경로에 닿지 못합니다. API는 CORS 허용 헤더를 보내지 않습니다.
+* **비밀 값은 로컬 폴더에만.** ChatGPT 봉인 키는 git이 무시하는 `.studyai-local/`에만 있습니다(폴더는 0700, 실행기가 직접 쓰는 비밀 파일은 0600. `state/`와 `logs/` 안의 파일은 Wrangler가 만들며 이 권한을 따르지 않을 수 있지만, 0700 폴더 안에 있습니다). 커밋되지 않고, git 기록에도 없으며, 브라우저로 보내지 않습니다. `pnpm scan:secrets`가 작업 트리와 전체 기록을 검사합니다.
+* **ChatGPT 토큰.** Durable Object가 토큰을 AES-256-GCM으로 봉인해 저장합니다. 봉인 키가 같은 폴더에 있으므로, 이것은 `state/`만 복사된 경우를 막을 뿐 내 파일을 읽을 수 있는 사람을 막지는 못합니다. 토큰은 브라우저, 주소, 로그로 나가지 않습니다. 자세한 내용과 한계: [docs/CHATGPT.md](docs/CHATGPT.md).
+* **강의 내용은 사용자가 보낼 때만.** 강의 내용은 사용자가 보내기를 눌렀을 때만, 보낼 내용을 먼저 보여 준 뒤 OpenAI로 갑니다. 서버가 프롬프트와 모델을 정하고, 브라우저는 시스템 프롬프트, 모델, 도구, 출력 길이를 정할 수 없습니다.
+* **악의적인 입력을 전제합니다.** PowerPoint, PDF, 학습 자료 묶음은 믿을 수 없는 입력으로 다룹니다. 문서화된 보호(ZIP·XML 제한, XSS·HTML 정리, 인용 확인)를 우회하는 것은 범위 안입니다.
 
-## Out of scope
+## 알고 있는 한계
 
-* Attacks that need control of the user's device, operating system, browser profile or an installed browser extension,
-  including reading the IndexedDB data of a signed-in device profile. The app does not encrypt local data at rest.
-* Security of third-party accounts and services (GitHub, Cloudflare, Google, Anthropic) and social engineering or
-  phishing aimed at an owner. Report problems in those services to their vendors.
-* Vulnerabilities in third-party dependencies that are not reachable through this project, or that affect only
-  development tooling. Report them upstream.
-* Deployments and forks that someone else operates, including their configuration, secrets, domains and modifications.
-* The local development server (`pnpm dev`). Production headers are served by Cloudflare from `dist/_headers`.
-* Incorrect, misleading or low-quality AI-generated study content. That is a quality bug: file a normal issue.
-* Reports without a demonstrated impact, such as raw automated scanner output or missing best-practice headers on
-  responses that carry no data.
-* Denial of service by sheer request volume against a free-tier deployment, or by a file the user chose to import that
-  stays within the documented limits.
+* **같은 컴퓨터의 다른 사용자.** 로컬 API에는 키가 없으므로, 같은 컴퓨터에서 `127.0.0.1:<포트>`에 연결할 수 있는 다른 운영체제 사용자나 프로그램은 연결된 ChatGPT 계정으로 요청할 수 있습니다. 자동 쿠키 방식도 비밀 값 없이 발급되면 이를 막지 못하므로 이 설계를 골랐습니다. 여러 사람이 쓰는 컴퓨터에서는 StudyAI를 실행해 둔 채로 두지 마세요.
+* **포트를 밖으로 여는 도구.** 포트 포워딩이나 터널이 `Host`를 `127.0.0.1:<포트>`로 바꿔 전달하면 그 너머의 누구든 연결된 계정을 쓸 수 있습니다. 브라우저가 아닌 프로그램은 `Origin`도 꾸밀 수 있습니다. 이 포트를 밖으로 열지 마세요.
+* **로컬 데이터는 암호화하지 않습니다.** 브라우저 프로필의 IndexedDB는 그 프로필을 쓸 수 있는 사람이 읽을 수 있습니다.
+
+## 범위 밖
+
+* 사용자 기기, 운영체제, 브라우저 프로필, 설치된 브라우저 확장을 장악해야 하는 공격.
+* 다른 회사 계정과 서비스(GitHub, OpenAI, Cloudflare, Anthropic)의 보안, 사용자를 노린 사회공학이나 피싱. 해당 회사에 알려 주세요.
+* 이 프로젝트에서 닿지 않거나 개발 도구에만 영향을 주는 서드파티 의존성 취약점. 원 프로젝트에 알려 주세요.
+* 다른 사람이 운영하는 배포본과 포크(설정, 비밀 값, 도메인, 수정 사항 포함).
+* 로컬 개발 서버(`pnpm dev`). 운영 헤더는 `dist/_headers`로 제공됩니다.
+* 틀리거나 오해를 부르거나 품질이 낮은 AI 생성 학습 내용. 품질 문제이니 일반 이슈로 올려 주세요.
+* 영향이 입증되지 않은 신고(자동 스캐너 출력 그대로, 데이터가 없는 응답의 권장 헤더 누락 등).
+* 요청량만으로 일으키는 서비스 거부, 또는 문서화된 한도 안에서 사용자가 고른 파일로 인한 지연.

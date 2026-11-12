@@ -54,7 +54,7 @@ export async function extractLectures(files: string[], outDir: string): Promise<
       source: file,
       markdownPath,
       reportPath,
-      confidence: `${deck.report.confidenceLabel} (${Math.round(deck.report.overallConfidence * 100)}%)`,
+      confidence: `${{ high: '높음', medium: '보통', low: '낮음' }[deck.report.confidenceLabel]} (${Math.round(deck.report.overallConfidence * 100)}%)`,
       slidesNeedingAttention: deck.report.slidesRequiringAttention,
       caveats: deck.report.potentiallyMissing,
     });
@@ -66,8 +66,8 @@ export async function extractLectures(files: string[], outDir: string): Promise<
 export function formatExtraction(results: ExtractedLecture[]): string {
   const lines: string[] = [];
   for (const r of results) {
-    lines.push(`${r.ref}  ${r.title}`, `    ${r.slideCount} slides, extraction confidence ${r.confidence}`, `    markdown: ${r.markdownPath}`);
-    if (r.slidesNeedingAttention.length) lines.push(`    SLIDES NEEDING ATTENTION (content may be missing): ${r.slidesNeedingAttention.join(', ')}`);
+    lines.push(`${r.ref}  ${r.title}`, `    슬라이드 ${r.slideCount}장, 추출 신뢰도 ${r.confidence}`, `    Markdown: ${r.markdownPath}`);
+    if (r.slidesNeedingAttention.length) lines.push(`    확인할 슬라이드 (내용이 누락되었을 수 있음): ${r.slidesNeedingAttention.join(', ')}`);
     for (const c of r.caveats) lines.push(`    - ${c}`);
   }
   return lines.join('\n');
@@ -89,7 +89,7 @@ export async function validatePackFile(packPath: string, lectureFiles: string[])
   try {
     raw = extractJson(readFileSync(packPath, 'utf8'));
   } catch (err) {
-    return { ok: false, fatal: err instanceof Error ? err.message : 'unreadable', report: `FAILED: ${err instanceof Error ? err.message : 'unreadable pack'}` };
+    return { ok: false, fatal: err instanceof Error ? err.message : '읽을 수 없는 파일', report: `실패: ${err instanceof Error ? err.message : '학습 팩을 읽을 수 없습니다.'}` };
   }
   const decks: { title: string; deck: ParsedDeck }[] = [];
   for (const f of lectureFiles) {
@@ -108,27 +108,26 @@ export async function validatePackFile(packPath: string, lectureFiles: string[])
     },
   }));
   const plan = planPack(raw, 'course', contexts);
-  if (plan.fatal) return { ok: false, fatal: plan.fatal, plan, report: `FAILED: ${plan.fatal}` };
+  if (plan.fatal) return { ok: false, fatal: plan.fatal, plan, report: `실패: ${plan.fatal}` };
 
   const lines: string[] = [];
   const s = plan.stats;
-  lines.push(`Items: ${s.received} received, ${s.accepted} accepted, ${s.rejected} skipped.`, `Sources: ${s.verified} of ${s.sources} cited quotes verified on the real slides; ${s.unverified} not verified.`);
-  for (const l of plan.lectureMap) lines.push(`Lecture ${l.ref} "${l.title}" → ${l.localId ? `${contexts.find((c) => c.id === l.localId)?.title} (matched by ${l.how})` : 'NOT MATCHED to any lecture file'}`);
-  const problems = plan.issues.filter((i) => i.severity === 'error' || /not found on slide|no cited quote|which is not matched|has only|No lecture in this course|Slide numbers may not line up|add up to/.test(i.message));
+  lines.push(`항목: 전체 ${s.received}개, 가져오기 ${s.accepted}개, 건너뜀 ${s.rejected}개.`, `출처: 인용문 ${s.sources}개 중 ${s.verified}개를 실제 슬라이드에서 확인했고, ${s.unverified}개는 확인하지 못했습니다.`);
+  for (const l of plan.lectureMap) lines.push(`강의 ${l.ref} "${l.title}" → ${l.localId ? `${contexts.find((c) => c.id === l.localId)?.title} (${{ hash: '파일 해시', title: '제목', manual: '직접 선택' }[l.how ?? 'manual']}로 연결)` : '일치하는 강의 파일 없음'}`);
+  const problems = plan.issues.filter((i) => i.severity === 'error' || i.code !== undefined);
   if (problems.length) {
-    lines.push('', 'Fix these before importing:');
+    lines.push('', '가져오기 전에 다음 문제를 수정하세요:');
     for (const i of problems) {
-      lines.push(`  [${i.severity}] ${i.where}: ${i.message}`);
-      const m = /slide (\d+) of “(.+?)”/.exec(i.message);
-      if (m) {
-        const ctx = contexts.find((c) => c.title === m[2]);
-        const t = ctx?.slideText(Number(m[1]));
-        if (t) lines.push(`      slide ${m[1]} actually says: ${t.replace(/\s+/g, ' ').slice(0, 280)}`);
+      lines.push(`  [${i.severity === 'error' ? '오류' : '주의'}] ${i.where}: ${i.message}`);
+      if (i.slide) {
+        const ctx = contexts.find((c) => c.title === i.slide?.lectureTitle);
+        const t = ctx?.slideText(i.slide.number);
+        if (t) lines.push(`      ${i.slide.number}번 슬라이드 원문: ${t.replace(/\s+/g, ' ').slice(0, 280)}`);
       }
     }
   }
   const ok = s.rejected === 0 && s.unverified === 0 && plan.issues.every((i) => i.severity !== 'error') && plan.lectureMap.every((l) => !!l.localId) && s.received > 0;
-  lines.push('', ok ? 'OK: the pack is valid and every cited quote was verified.' : 'NOT READY: see the problems above, fix the pack, and run this check again.');
+  lines.push('', ok ? '확인 완료: 학습 팩 형식과 모든 인용문이 확인되었습니다.' : '수정 필요: 위의 문제를 해결한 뒤 다시 검사하세요.');
   return { ok, plan, report: lines.join('\n') };
 }
 

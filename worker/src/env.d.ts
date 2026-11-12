@@ -1,8 +1,7 @@
-/** Secrets are not in wrangler.jsonc, so `wrangler types` cannot know them. They are optional on purpose: a missing one must fail closed. */
+/** Not in wrangler.jsonc, so `wrangler types` cannot know them. Optional on purpose: a missing one must fail closed. */
 interface Env {
-  GEMINI_API_KEY?: string;
-  OWNER_KEY_HASH?: string;
-  SESSION_SECRET?: string;
-  /** Hosts the site answers on, e.g. "studyai.example.workers.dev". A secret, so no hostname is committed. Empty or missing = answers nothing. */
-  ALLOWED_HOSTS?: string;
+  /** "127.0.0.1:<port>". Written only by scripts/local.mjs. Absent in every hosted copy, which then has no AI routes. */
+  STUDYAI_LOOPBACK?: string;
+  /** base64url of 32 random bytes: the AES-GCM key for the sealed ChatGPT credentials. Written only by scripts/local.mjs. */
+  CHATGPT_SEAL_KEY?: string;
 }

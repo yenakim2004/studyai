@@ -249,7 +249,7 @@ describe('the exam blueprint', () => {
     const slides = await slidesOf(conceptual());
     const plan = buildBlueprint({ slides, topics: [], count: 4 });
     expect(plan).toHaveLength(4);
-    expect(new Set(plan.map((s) => s.topic))).toEqual(new Set(['The lecture']));
+    expect(new Set(plan.map((s) => s.topic))).toEqual(new Set(['강의 전체']));
   });
 });
 
@@ -480,8 +480,8 @@ describe('splitting the plan into requests', () => {
   });
 
   it('describes a slot in one readable line', () => {
-    expect(describeSlot({ n: 1, type: 'scenario', difficulty: 3, marks: 6, points: 6, topic: 'Defences', slides: [4, 5] })).toBe('Scenario · hard · 6 marks · Defences · slides 4, 5');
-    expect(describeSlot({ n: 2, type: 'mcq', difficulty: 1, marks: 1, points: 1, topic: 'Threats', slides: [2] })).toBe('Multiple choice · easy · 1 mark · Threats · slide 2');
+    expect(describeSlot({ n: 1, type: 'scenario', difficulty: 3, marks: 6, points: 6, topic: 'Defences', slides: [4, 5] })).toBe('상황 문제 · 난이도 어려움 · 6점 · Defences · 슬라이드 4, 5');
+    expect(describeSlot({ n: 2, type: 'mcq', difficulty: 1, marks: 1, points: 1, topic: 'Threats', slides: [2] })).toBe('객관식 · 난이도 쉬움 · 1점 · Threats · 슬라이드 2');
   });
 });
 

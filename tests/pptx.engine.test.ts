@@ -157,7 +157,7 @@ describe('pictures and media', () => {
     expect(s.flags.map((f) => f.code)).toContain('NO_EXTRACTABLE_TEXT');
     expect(s.confidence).toBe('low');
     expect(deck.report.slidesRequiringAttention).toEqual([1]);
-    expect(deck.report.potentiallyMissing.join(' ')).toMatch(/No extractable text/);
+    expect(deck.report.potentiallyMissing.join(' ')).toMatch(/추출할 텍스트 없음/);
     expect(deck.report.confidenceLabel).not.toBe('high');
   });
 
@@ -540,5 +540,17 @@ describe('math script handling (found on a real slide)', () => {
     const latex = await latexOf(mr('A') + sub('TM') + sub(' ') + mr('≤') + sub('m'));
     expect(latex).toBe(String.raw`A _{\text{TM}} ≤ _{\text{m}}`);
     expect(latex).not.toMatch(/_\{[^}]*\}\s*_\{/);
+  });
+});
+
+describe('a report saved before the Korean wording', () => {
+  it('is rebuilt with its old slide lines replaced, and keeps only the deck-level notes', async () => {
+    const { rebuildReport } = await import('../src/core/pptx/report');
+    const deck = await parsePptx(buildPptx({ slides: [{ shapes: titleSp(2, 'Only a picture') + picture(3, 'rIdImg1', 0, 0, 9_000_000, 6_000_000, '') , rels: { rIdImg1: ['image', '../media/image1.png'] }, parts: { 'ppt/media/image1.png': PNG_1X1 } }] }));
+    const legacy = { ...deck.report, potentiallyMissing: ['Picture that may hold text or a diagram (not read automatically) — slide 1', 'Old style note — slides 2, 3 … (+4 more)', 'A deck-level note'] };
+    const rebuilt = rebuildReport(legacy, deck.slides).potentiallyMissing;
+    expect(rebuilt.filter((m) => /— slides? /.test(m))).toEqual([]);
+    expect(rebuilt).toContain('A deck-level note');
+    expect(rebuilt).toEqual(expect.arrayContaining([expect.stringMatching(/ — 슬라이드 1$/)]));
   });
 });

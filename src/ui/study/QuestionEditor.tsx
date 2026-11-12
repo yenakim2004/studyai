@@ -51,7 +51,7 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
     setTopic(q?.topic ?? '');
     setLectureIds(q?.lectureIds ?? []);
     setOptions(q?.type === 'mcq' && q.options ? q.options.map((o) => ({ ...o })) : [{ id: newId(), text: '', correct: true }, { id: newId(), text: '', correct: false }]);
-    setTf(q?.type === 'truefalse' ? (q.options?.find((o) => o.correct)?.text === 'False' ? 'false' : 'true') : 'true');
+    setTf(q?.type === 'truefalse' ? (q.options?.find((o) => o.correct)?.id === 'o2' ? 'false' : 'true') : 'true');
     setModelAnswer(q?.modelAnswer ?? '');
     setPoints(q?.rubric.map((r) => ({ id: r.id, text: r.text, marks: r.marks, keywords: r.keywords?.join(', ') ?? '' })) ?? []);
     setMinWords(q?.expectedWords?.[0]?.toString() ?? '');
@@ -66,18 +66,18 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
 
   const save = async () => {
     setError(undefined);
-    if (!prompt.trim()) return setError('Write the question first.');
-    if (!(marks > 0)) return setError('The question needs marks greater than zero.');
+    if (!prompt.trim()) return setError('먼저 문제를 쓰세요.');
+    if (!(marks > 0)) return setError('문제 배점은 0보다 커야 합니다.');
     let opts: QuestionRow['options'];
     if (type === 'mcq') {
       const filled = options.filter((o) => o.text.trim());
-      if (filled.length < 2) return setError('A multiple-choice question needs at least two options.');
-      if (!filled.some((o) => o.correct)) return setError('Mark at least one option as correct.');
+      if (filled.length < 2) return setError('객관식 문제에는 보기가 두 개 이상 있어야 합니다.');
+      if (!filled.some((o) => o.correct)) return setError('정답 보기를 하나 이상 표시하세요.');
       opts = filled.map((o, i) => ({ id: `o${i + 1}`, text: o.text.trim(), correct: o.correct }));
     } else if (type === 'truefalse') {
-      opts = [{ id: 'o1', text: 'True', correct: tf === 'true' }, { id: 'o2', text: 'False', correct: tf === 'false' }];
+      opts = [{ id: 'o1', text: '참', correct: tf === 'true' }, { id: 'o2', text: '거짓', correct: tf === 'false' }];
     }
-    if (!objective && !modelAnswer.trim() && points.length === 0) return setError('Give a model answer or at least one marking point, so you can mark your answers later.');
+    if (!objective && !modelAnswer.trim() && points.length === 0) return setError('나중에 답을 채점할 수 있도록 모범 답안이나 채점 기준을 하나 이상 쓰세요.');
     const now = Date.now();
     const lo = minWords.trim() ? Number(minWords) : undefined;
     const hi = maxWords.trim() ? Number(maxWords) : undefined;
@@ -105,10 +105,10 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
     };
     try {
       await saveQuestion(db, row, now);
-      toast.show(question ? 'Question saved.' : 'Question added.', 'ok');
+      toast.show(question ? '문제를 저장했습니다.' : '문제를 추가했습니다.', 'ok');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save.');
+      setError(err instanceof Error ? err.message : '저장하지 못했습니다.');
     }
   };
 
@@ -117,14 +117,14 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
       open={open}
       onClose={onClose}
       wide
-      title={question ? 'Edit question' : 'New question'}
+      title={question ? '문제 편집' : '새 문제'}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button variant="primary" type="submit" form="question-form">
-            {question ? 'Save question' : 'Add question'}
+            {question ? '문제 저장' : '문제 추가'}
           </Button>
         </>
       }
@@ -138,7 +138,7 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
         }}
       >
         <div className="grid gap-4 sm:grid-cols-4">
-          <Field label="Kind of question" htmlFor="q-type">
+          <Field label="문제 유형" htmlFor="q-type">
             <Select id="q-type" value={type} onChange={(e) => setType(e.target.value as QuestionType)}>
               {QUESTION_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -147,89 +147,89 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
               ))}
             </Select>
           </Field>
-          <Field label="Marks" htmlFor="q-marks">
+          <Field label="배점" htmlFor="q-marks">
             <TextInput id="q-marks" type="number" min={0.5} step={0.5} value={marks} onChange={(e) => setMarks(Number(e.target.value))} />
           </Field>
-          <Field label="Difficulty" htmlFor="q-diff">
+          <Field label="난이도" htmlFor="q-diff">
             <Select id="q-diff" value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3)}>
-              <option value={1}>Easy</option>
-              <option value={2}>Medium</option>
-              <option value={3}>Hard</option>
+              <option value={1}>쉬움</option>
+              <option value={2}>보통</option>
+              <option value={3}>어려움</option>
             </Select>
           </Field>
-          <Field label="Topic" htmlFor="q-topic">
-            <TextInput id="q-topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Reductions" />
+          <Field label="주제" htmlFor="q-topic">
+            <TextInput id="q-topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="예: 환원" />
           </Field>
         </div>
-        <Field label="Question" htmlFor="q-prompt" hint="Markdown works. Write maths as $x^2$ and code in ``` fences.">
+        <Field label="문제" htmlFor="q-prompt" hint="마크다운을 쓸 수 있습니다. 수식은 $x^2$처럼, 코드는 ``` 펜스 안에 쓰세요.">
           <TextArea id="q-prompt" rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         </Field>
 
         {type === 'mcq' && (
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium">Options (tick every correct one)</legend>
+            <legend className="mb-1 text-sm font-medium">보기(정답을 모두 체크)</legend>
             {options.map((o, i) => (
               <div key={o.id} className="flex items-center gap-2">
-                <input type="checkbox" aria-label={`Option ${i + 1} is correct`} className="size-4 accent-[var(--accent)]" checked={o.correct} onChange={(e) => setOptions(options.map((x) => (x.id === o.id ? { ...x, correct: e.target.checked } : x)))} />
-                <TextInput aria-label={`Option ${i + 1} text`} value={o.text} onChange={(e) => setOptions(options.map((x) => (x.id === o.id ? { ...x, text: e.target.value } : x)))} />
-                <button type="button" aria-label={`Remove option ${i + 1}`} disabled={options.length <= 2} onClick={() => setOptions(options.filter((x) => x.id !== o.id))} className="inline-flex size-9 shrink-0 items-center justify-center rounded text-ink-3 hover:bg-bad-soft hover:text-bad disabled:opacity-30">
+                <input type="checkbox" aria-label={`보기 ${i + 1} 정답`} className="size-4 accent-[var(--accent)]" checked={o.correct} onChange={(e) => setOptions(options.map((x) => (x.id === o.id ? { ...x, correct: e.target.checked } : x)))} />
+                <TextInput aria-label={`보기 ${i + 1} 내용`} value={o.text} onChange={(e) => setOptions(options.map((x) => (x.id === o.id ? { ...x, text: e.target.value } : x)))} />
+                <button type="button" aria-label={`보기 ${i + 1} 삭제`} disabled={options.length <= 2} onClick={() => setOptions(options.filter((x) => x.id !== o.id))} className="inline-flex size-9 shrink-0 items-center justify-center rounded text-ink-3 hover:bg-bad-soft hover:text-bad disabled:opacity-30">
                   <Trash2 className="size-4" aria-hidden />
                 </button>
               </div>
             ))}
             <div>
               <Button size="sm" onClick={() => setOptions([...options, { id: newId(), text: '', correct: false }])} disabled={options.length >= 8}>
-                <Plus className="size-4" aria-hidden /> Add option
+                <Plus className="size-4" aria-hidden /> 보기 추가
               </Button>
             </div>
           </fieldset>
         )}
 
         {type === 'truefalse' && (
-          <Field label="The statement is" htmlFor="q-tf">
+          <Field label="이 진술은" htmlFor="q-tf">
             <Select id="q-tf" value={tf} onChange={(e) => setTf(e.target.value as 'true' | 'false')} className="sm:max-w-40">
-              <option value="true">True</option>
-              <option value="false">False</option>
+              <option value="true">참</option>
+              <option value="false">거짓</option>
             </Select>
           </Field>
         )}
 
         {!objective && (
           <>
-            <Field label="Model answer" htmlFor="q-model" hint="What a full-marks answer says, in plain student language, from the slides.">
+            <Field label="모범 답안" htmlFor="q-model" hint="만점 답이 슬라이드 내용으로 쉬운 학생 말투로 쓰는 내용입니다.">
               <TextArea id="q-model" rows={5} value={modelAnswer} onChange={(e) => setModelAnswer(e.target.value)} />
             </Field>
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">Marking points</legend>
+              <legend className="mb-1 text-sm font-medium">채점 기준</legend>
               {points.map((p, i) => (
                 <div key={p.id} className="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_5rem_auto]">
-                  <TextInput aria-label={`Point ${i + 1}: what the answer must contain`} placeholder="What the answer must contain" value={p.text} onChange={(e) => setPoints(points.map((x) => (x.id === p.id ? { ...x, text: e.target.value } : x)))} />
-                  <TextInput aria-label={`Point ${i + 1}: keywords (optional)`} placeholder="Keywords (optional)" value={p.keywords} onChange={(e) => setPoints(points.map((x) => (x.id === p.id ? { ...x, keywords: e.target.value } : x)))} />
-                  <TextInput aria-label={`Point ${i + 1}: marks`} type="number" min={0} step={0.5} value={p.marks} onChange={(e) => setPoints(points.map((x) => (x.id === p.id ? { ...x, marks: Number(e.target.value) } : x)))} />
-                  <button type="button" aria-label={`Remove point ${i + 1}`} onClick={() => setPoints(points.filter((x) => x.id !== p.id))} className="inline-flex size-9 items-center justify-center rounded text-ink-3 hover:bg-bad-soft hover:text-bad">
+                  <TextInput aria-label={`기준 ${i + 1}: 답에 들어가야 할 내용`} placeholder="답에 들어가야 할 내용" value={p.text} onChange={(e) => setPoints(points.map((x) => (x.id === p.id ? { ...x, text: e.target.value } : x)))} />
+                  <TextInput aria-label={`기준 ${i + 1}: 키워드(선택)`} placeholder="키워드(선택)" value={p.keywords} onChange={(e) => setPoints(points.map((x) => (x.id === p.id ? { ...x, keywords: e.target.value } : x)))} />
+                  <TextInput aria-label={`기준 ${i + 1}: 점수`} type="number" min={0} step={0.5} value={p.marks} onChange={(e) => setPoints(points.map((x) => (x.id === p.id ? { ...x, marks: Number(e.target.value) } : x)))} />
+                  <button type="button" aria-label={`기준 ${i + 1} 삭제`} onClick={() => setPoints(points.filter((x) => x.id !== p.id))} className="inline-flex size-9 items-center justify-center rounded text-ink-3 hover:bg-bad-soft hover:text-bad">
                     <Trash2 className="size-4" aria-hidden />
                   </button>
                 </div>
               ))}
               <div className="flex items-center gap-3">
                 <Button size="sm" onClick={() => setPoints([...points, { id: newId(), text: '', marks: 1, keywords: '' }])}>
-                  <Plus className="size-4" aria-hidden /> Add marking point
+                  <Plus className="size-4" aria-hidden /> 채점 기준 추가
                 </Button>
                 {points.length > 0 && (
                   <span className={`text-sm ${Math.abs(rubricSum - marks) > 0.01 ? 'text-warn' : 'text-ink-3'}`}>
-                    Points add up to {rubricSum} of {marks} marks
+                    기준 합계 {rubricSum}점 / 배점 {marks}점
                   </span>
                 )}
               </div>
             </fieldset>
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Expected words (from)" htmlFor="q-min">
+              <Field label="예상 단어 수(최소)" htmlFor="q-min">
                 <TextInput id="q-min" type="number" min={0} value={minWords} onChange={(e) => setMinWords(e.target.value)} />
               </Field>
-              <Field label="Expected words (to)" htmlFor="q-max">
+              <Field label="예상 단어 수(최대)" htmlFor="q-max">
                 <TextInput id="q-max" type="number" min={0} value={maxWords} onChange={(e) => setMaxWords(e.target.value)} />
               </Field>
-              <Field label="Hint (optional)" htmlFor="q-hint">
+              <Field label="힌트(선택)" htmlFor="q-hint">
                 <TextInput id="q-hint" value={hint} onChange={(e) => setHint(e.target.value)} />
               </Field>
             </div>
@@ -237,7 +237,7 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Where does the answer come from?" htmlFor="q-basis">
+          <Field label="답은 어디에서 오나요?" htmlFor="q-basis">
             <Select id="q-basis" value={basis} onChange={(e) => setBasis(e.target.value as Basis)}>
               {BASES.map((b) => (
                 <option key={b} value={b}>
@@ -247,7 +247,7 @@ export function QuestionEditor({ open, onClose, courseId, lectures, question }: 
             </Select>
           </Field>
           <fieldset>
-            <legend className="mb-1.5 text-sm font-medium">Lectures it covers</legend>
+            <legend className="mb-1.5 text-sm font-medium">다루는 강의</legend>
             <ul className="max-h-28 overflow-y-auto rounded-[var(--radius-control)] border border-rule">
               {lectures.map((l) => (
                 <li key={l.id}>

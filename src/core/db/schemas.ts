@@ -76,6 +76,7 @@ const shape = z.object({
   anchor: z.enum(['top', 'middle', 'bottom']).optional(),
   fontScale: num.optional(),
   vertical: z.boolean().optional(),
+  textLayer: z.literal(true).optional(),
 });
 
 const line = z.object({
@@ -170,6 +171,7 @@ export const slideSchema = z.object({
 });
 
 export const deckMetaSchema = z.object({
+  format: z.enum(['pptx', 'pdf']).optional(),
   title: str(1_000).optional(),
   author: str(1_000).optional(),
   created: str(100).optional(),

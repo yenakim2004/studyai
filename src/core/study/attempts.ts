@@ -4,7 +4,7 @@ import { autoGrade } from './exam';
 import type { AnswerState, AttemptRow, ExamConfig, ExamRow, Grade, QuestionRow } from './types';
 
 export async function createExam(db: StudyDB, courseId: string, config: ExamConfig, questionIds: string[], now = Date.now()): Promise<ExamRow> {
-  if (questionIds.length === 0) throw new Error('An exam needs at least one question.');
+  if (questionIds.length === 0) throw new Error('시험에는 문제가 하나 이상 있어야 합니다.');
   const row: ExamRow = { id: newId(), courseId, config, questionIds, createdAt: now };
   await db.exams.add(row);
   return row;
@@ -12,7 +12,7 @@ export async function createExam(db: StudyDB, courseId: string, config: ExamConf
 
 export async function startAttempt(db: StudyDB, examId: string, now = Date.now()): Promise<AttemptRow> {
   const exam = await db.exams.get(examId);
-  if (!exam) throw new Error('Exam not found.');
+  if (!exam) throw new Error('시험을 찾을 수 없습니다.');
   const row: AttemptRow = { id: newId(), examId, courseId: exam.courseId, startedAt: now, elapsedMs: 0, status: 'in-progress', answers: {}, grades: {}, flagged: [] };
   await db.attempts.add(row);
   return row;
@@ -21,8 +21,8 @@ export async function startAttempt(db: StudyDB, examId: string, now = Date.now()
 async function mutate(db: StudyDB, attemptId: string, fn: (a: AttemptRow) => void): Promise<AttemptRow> {
   return db.transaction('rw', db.attempts, async () => {
     const a = await db.attempts.get(attemptId);
-    if (!a) throw new Error('Attempt not found.');
-    if (a.status === 'submitted') throw new Error('This attempt has already been submitted.');
+    if (!a) throw new Error('응시 기록을 찾을 수 없습니다.');
+    if (a.status === 'submitted') throw new Error('이미 제출한 응시입니다.');
     fn(a);
     await db.attempts.put(a);
     return a;
@@ -66,8 +66,8 @@ export async function submitAttempt(db: StudyDB, attemptId: string, questions: Q
 export async function saveGrade(db: StudyDB, attemptId: string, questionId: string, grade: Grade): Promise<AttemptRow> {
   return db.transaction('rw', db.attempts, async () => {
     const a = await db.attempts.get(attemptId);
-    if (!a) throw new Error('Attempt not found.');
-    if (a.status !== 'submitted') throw new Error('Submit the exam before marking it.');
+    if (!a) throw new Error('응시 기록을 찾을 수 없습니다.');
+    if (a.status !== 'submitted') throw new Error('채점하기 전에 시험을 제출하세요.');
     a.grades[questionId] = grade;
     await db.attempts.put(a);
     return a;

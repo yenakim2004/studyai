@@ -40,12 +40,12 @@ function cut(start: number, end: number, max: number): [number, number][] {
   return out;
 }
 
-const range = (a: number, b: number): string => (a === b ? `slide ${a}` : `slides ${a}–${b}`);
+const range = (a: number, b: number): string => (a === b ? `슬라이드 ${a}` : `슬라이드 ${a}–${b}`);
 
 export function lessonParts(topics: readonly Pick<Topic, 'title' | 'startSlide' | 'endSlide'>[], slideCount: number, maxSlides = 4): LessonPart[] {
   const usable = topics.filter((t) => t.startSlide >= 1 && t.endSlide >= t.startSlide && t.endSlide <= slideCount).sort((a, b) => a.startSlide - b.startSlide);
   // Without usable topics the lesson simply walks through the slides in order.
-  const source = usable.length > 0 ? usable : slideCount > 0 ? [{ title: 'The lecture', startSlide: 1, endSlide: slideCount }] : [];
+  const source = usable.length > 0 ? usable : slideCount > 0 ? [{ title: '강의 전체', startSlide: 1, endSlide: slideCount }] : [];
 
   // 1. every topic is cut into chunks of at most `maxSlides`
   const chunks: Chunk[] = source.flatMap((t) => {
@@ -68,12 +68,12 @@ export function lessonParts(topics: readonly Pick<Topic, 'title' | 'startSlide' 
     const names = [...new Set(g.map((c) => c.topic))];
     const topic = names.join(' · ');
     // the list shows at most two topic names; the question to the tutor carries them all
-    const shown = names.length > 2 ? `${names[0]} · ${names[1]} · +${names.length - 2} more` : topic;
+    const shown = names.length > 2 ? `${names[0]} · ${names[1]} 외 ${names.length - 2}개` : topic;
     const piece = g.length === 1 ? g[0]!.piece : undefined;
     return {
       n: i + 1,
       topic,
-      title: piece ? `${shown} (part ${piece[0]} of ${piece[1]}, ${range(start, end)})` : `${shown} (${range(start, end)})`,
+      title: piece ? `${shown} (${piece[1]}부분 중 ${piece[0]}, ${range(start, end)})` : `${shown} (${range(start, end)})`,
       start,
       end,
       slides: Array.from({ length: end - start + 1 }, (_, k) => start + k),
@@ -87,9 +87,9 @@ export function lessonParts(topics: readonly Pick<Topic, 'title' | 'startSlide' 
  */
 export function lessonQuestion(part: LessonPart, first: boolean, covered: readonly LessonPart[] = []): string {
   const where = range(part.start, part.end);
-  if (first) return `Teach me "${part.topic}" (${where}) from the beginning, in the order of the slides, as if I know nothing about it yet. Use only these slides. Where a slide does not explain something, say so.`;
+  if (first) return `"${part.topic}"(${where})을(를) 내가 아직 아무것도 모른다고 생각하고 처음부터 슬라이드 순서대로 가르쳐 주세요. 이 슬라이드만 사용하세요. 슬라이드가 설명하지 않는 부분은 그렇다고 말해 주세요.`;
   const recent = covered.slice(-5).map((p) => `${p.topic} (${range(p.start, p.end)})`);
-  const older = covered.length > 5 ? `${covered.length - 5} earlier part${covered.length - 5 === 1 ? '' : 's'} and ` : '';
-  const memory = recent.length > 0 ? ` (So far we have covered ${older}${recent.join('; ')}.)` : '';
-  return `Now teach me the next part: "${part.topic}" (${where}), in the order of the slides. Connect it to what we have already covered${memory}. Use only these slides. Where a slide does not explain something, say so.`;
+  const older = covered.length > 5 ? `앞선 ${covered.length - 5}개 부분과 ` : '';
+  const memory = recent.length > 0 ? ` (지금까지 ${older}${recent.join('; ')}을(를) 배웠습니다.)` : '';
+  return `이제 다음 부분 "${part.topic}"(${where})을(를) 슬라이드 순서대로 가르쳐 주세요. 지금까지 배운 내용과 연결해 주세요${memory}. 이 슬라이드만 사용하세요. 슬라이드가 설명하지 않는 부분은 그렇다고 말해 주세요.`;
 }

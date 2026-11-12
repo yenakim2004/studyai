@@ -17,7 +17,7 @@ test('security headers are present and the CSP actually blocks injected script',
   expect(h['referrer-policy']).toBe('no-referrer');
   expect(h['x-frame-options']).toBe('DENY');
   expect(h['permissions-policy']).toContain('camera=()');
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: '대시보드' })).toBeVisible();
   violations.length = 0; // the page itself loaded cleanly; now probe the policy
 
   // An injected inline <script> must not run.
@@ -41,17 +41,17 @@ test('a full study session produces no CSP violations or script errors', async (
   await page.goto('/');
   await createCourse(page, 'Security', 'BCS303');
   await importFiles(page, [{ name: 'lec.pptx', buffer: lectureBytes() }]);
-  await expect(page.getByText(/Imported: 5 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 5장/)).toBeVisible();
   await page.getByRole('link', { name: 'lec', exact: true }).click();
-  await expect(page.getByText('Slide 1 of 5')).toBeVisible();
+  await expect(page.getByText('슬라이드 1/5')).toBeVisible();
   for (const n of [2, 3, 4, 5]) {
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByText(`Slide ${n} of 5`)).toBeVisible();
+    await expect(page.getByText(`슬라이드 ${n}/5`)).toBeVisible();
   }
   await page.goto('/settings');
-  await expect(page.getByRole('heading', { name: 'Backup and restore' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '백업과 복원' })).toBeVisible();
   await page.goto('/search?q=turing');
-  await expect(page.getByText(/slide/).first()).toBeVisible();
+  await expect(page.getByText(/슬라이드/).first()).toBeVisible();
   expect(problems).toEqual([]);
 });
 

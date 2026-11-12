@@ -1,12 +1,12 @@
 import { newId } from '../id';
-import type { ParsedDeck } from '../pptx/model';
+import type { ExtractionReport, ParsedDeck } from '../pptx/model';
 import { carryPictureTexts, withPictureText } from '../pptx/picturetext';
 import { rebuildReport } from '../pptx/report';
 import type { CourseRow, LectureRow, MediaRow, SlideRow, StudyDB } from './db';
 
 /** Strip hash prefixes and the extension from a file name to get a readable lecture title. */
 export function titleFromFileName(fileName: string): string {
-  const base = fileName.replace(/\.(pptx|pptm|ppsx|potx)$/i, '').replace(/^[0-9a-f]{32}_/i, '');
+  const base = fileName.replace(/\.(pptx|pptm|ppsx|potx|pdf)$/i, '').replace(/^[0-9a-f]{32}_/i, '');
   return base.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim() || fileName;
 }
 
@@ -16,7 +16,7 @@ export function titleFromFileName(fileName: string): string {
 
 export async function createCourse(db: StudyDB, input: { name: string; code?: string; color?: number }): Promise<CourseRow> {
   const name = input.name.trim();
-  if (!name) throw new Error('A course needs a name.');
+  if (!name) throw new Error('과목 이름을 입력하세요.');
   const order = (await db.courses.orderBy('order').last())?.order ?? -1;
   const now = Date.now();
   const row: CourseRow = {
@@ -36,7 +36,7 @@ export async function createCourse(db: StudyDB, input: { name: string; code?: st
 
 export async function updateCourse(db: StudyDB, id: string, patch: Partial<Omit<CourseRow, 'id' | 'createdAt'>>): Promise<void> {
   const n = await db.courses.update(id, { ...patch, updatedAt: Date.now() });
-  if (n === 0) throw new Error('Course not found.');
+  if (n === 0) throw new Error('과목을 찾을 수 없습니다.');
 }
 
 /** Delete a course and everything that belongs to it. */
@@ -100,7 +100,7 @@ export interface ImportInput {
 /** Add a parsed deck to a course as a new lecture. */
 export async function importLecture(db: StudyDB, input: ImportInput): Promise<LectureRow> {
   const course = await db.courses.get(input.courseId);
-  if (!course) throw new Error('Course not found.');
+  if (!course) throw new Error('과목을 찾을 수 없습니다.');
   const id = newId();
   const now = Date.now();
   const last = await db.lectures.where('courseId').equals(input.courseId).toArray();
@@ -135,7 +135,7 @@ export async function importLecture(db: StudyDB, input: ImportInput): Promise<Le
  */
 export async function replaceLecture(db: StudyDB, lectureId: string, input: Omit<ImportInput, 'courseId'>): Promise<LectureRow> {
   const prev = await db.lectures.get(lectureId);
-  if (!prev) throw new Error('Lecture not found.');
+  if (!prev) throw new Error('강의를 찾을 수 없습니다.');
   // Text the student typed for pictures that are still in the new file is kept.
   const slides = carryPictureTexts(await loadSlides(db, lectureId), input.deck.slides);
   const hasTyped = slides.some((s) => s.pictureTexts?.length);
@@ -148,7 +148,7 @@ export async function replaceLecture(db: StudyDB, lectureId: string, input: Omit
     revision: prev.revision + 1,
     slideCount: input.deck.slides.length,
     meta: input.deck.meta,
-    report: hasTyped ? rebuildReport(input.deck.report, slides) : input.deck.report,
+    report: hasTyped ? keepLimitations(input.deck.report, rebuildReport(input.deck.report, slides)) : input.deck.report,
   };
   await db.transaction('rw', [db.lectures, db.slides, db.media, db.files], async () => {
     await db.slides.where('lectureId').equals(lectureId).delete();
@@ -159,6 +159,11 @@ export async function replaceLecture(db: StudyDB, lectureId: string, input: Omit
     await db.lectures.put(next);
   });
   return next;
+}
+
+/** The limitations list belongs to the file format the report was made for (PowerPoint or PDF); rebuilding the counts keeps it. */
+function keepLimitations(previous: ExtractionReport, rebuilt: ExtractionReport): ExtractionReport {
+  return { ...rebuilt, limitations: previous.limitations };
 }
 
 async function removeLectureData(db: StudyDB, lectureId: string): Promise<void> {
@@ -174,7 +179,7 @@ export async function deleteLecture(db: StudyDB, lectureId: string): Promise<voi
 
 export async function renameLecture(db: StudyDB, lectureId: string, title: string): Promise<void> {
   const t = title.trim();
-  if (!t) throw new Error('A lecture needs a title.');
+  if (!t) throw new Error('강의 제목을 입력하세요.');
   await db.lectures.update(lectureId, { title: t, updatedAt: Date.now() });
 }
 
@@ -183,7 +188,7 @@ export async function reorderLectures(db: StudyDB, courseId: string, orderedIds:
   await db.transaction('rw', db.lectures, async () => {
     const existing = await db.lectures.where('courseId').equals(courseId).primaryKeys();
     if (existing.length !== orderedIds.length || !orderedIds.every((id) => existing.includes(id))) {
-      throw new Error('Lecture order does not match the course’s lectures.');
+      throw new Error('강의 순서가 이 과목의 강의 목록과 맞지 않습니다. 새로 고친 뒤 다시 시도하세요.');
     }
     for (let i = 0; i < orderedIds.length; i++) await db.lectures.update(orderedIds[i]!, { order: i });
   });
@@ -210,11 +215,11 @@ export async function setPictureText(db: StudyDB, lectureId: string, slideIndex:
   await db.transaction('rw', [db.lectures, db.slides], async () => {
     const lecture = await db.lectures.get(lectureId);
     const row = await db.slides.get([lectureId, slideIndex]);
-    if (!lecture || !row) throw new Error('Slide not found.');
+    if (!lecture || !row) throw new Error('슬라이드(페이지)를 찾을 수 없습니다.');
     const updated = withPictureText(row, elementId, text);
-    if (updated === row) throw new Error('That picture is not on this slide.');
+    if (updated === row) throw new Error('그 그림은 이 슬라이드(페이지)에 없습니다.');
     await db.slides.put({ ...updated, lectureId });
     const slides = await loadSlides(db, lectureId);
-    await db.lectures.put({ ...lecture, updatedAt: Date.now(), report: rebuildReport(lecture.report, slides) });
+    await db.lectures.put({ ...lecture, updatedAt: Date.now(), report: keepLimitations(lecture.report, rebuildReport(lecture.report, slides)) });
   });
 }

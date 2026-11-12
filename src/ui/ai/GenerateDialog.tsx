@@ -9,9 +9,11 @@ import type { SlideData } from '@/core/pptx/model';
 import { buildBlueprint, describeSlot, splitIntoRequests, type PlannedSlot } from '@/core/study/blueprint';
 import { lectureToMarkdown } from '@/core/study/markdown';
 import { packCounts } from '@/core/study/pack-format';
-import { LIMITS } from '@/core/tutor/contract';
+import { AI_OUTPUT_CAP, LIMITS } from '@/core/tutor/contract';
 import { generateOutputTokens } from '@/core/tutor/prompts';
 import { Button, Dialog, Select, TextInput } from '@/ui/primitives';
+import { aiBlocker } from '@/ui/ai/blocker';
+import { AI_DESTINATION as dest } from '@/ui/ai/destination';
 
 const db = getDb();
 
@@ -40,7 +42,7 @@ export function GenerateDialog({
   onGenerated: (json: string, cutOff: boolean, expected?: PlannedSlot[]) => void;
 }) {
   const ai = useAiServer();
-  const [consent, setConsent] = useSetting<string>('aiConsentAt');
+  const [consent, setConsent] = useSetting<string>(dest.consentKey);
   const existing = useQuestions(course.id);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   // Only the slides in these ranges are sent (default: all). Title and acknowledgement slides need not leave the device.
@@ -110,12 +112,13 @@ export function GenerateDialog({
     [ready, noSlides, sending.map(cacheKey).join(','), ranges, topicOff, loaded],
   );
 
-  const usable = ai.phase === 'ready' && (ai.status?.state === 'ready' || ai.status?.state === 'low');
+  const blocker = aiBlocker(ai);
+  const usable = blocker === undefined;
   const tooBig = markdown.length > LIMITS.lectureMarkdown;
   const none = !wants.notes && !wants.cards && !wants.questions;
   const badRange = lectures.some((l) => picked.has(l.id) && !rangeOf(l).ok);
-  // One request can only hold so many items (the free AI writes at most this many tokens), so the real numbers are shown.
-  const outputCap = generateOutputTokens(ai.status?.limits.maxOutputTokens ?? 4_000);
+  // One request can only hold so many items (the prompt asks for at most this many tokens), so the real numbers are shown.
+  const outputCap = generateOutputTokens(AI_OUTPUT_CAP);
 
   // ---- the exam plan -------------------------------------------------------------------------
   const wanted = Number(questionCount);
@@ -141,7 +144,7 @@ export function GenerateDialog({
   const alreadyAsked = useMemo(() => [...lectureQuestions].sort((a, b) => b.createdAt - a.createdAt).slice(0, 40).map((q) => q.prompt.replace(/\s+/g, ' ').trim().slice(0, 200)), [lectureQuestions]);
 
   const counts = packCounts({ wants, amount, outputTokens: outputCap, ...(planned.length > 0 ? { blueprint: planned } : {}) });
-  const countText = [counts.questions > 0 && `${counts.questions} exam question${counts.questions === 1 ? '' : 's'}`, counts.cards > 0 && `${counts.cards} flashcard${counts.cards === 1 ? '' : 's'}`, counts.notes > 0 && `${counts.notes} note${counts.notes === 1 ? '' : 's'}`].filter(Boolean).join(', ');
+  const countText = [counts.questions > 0 && `시험 문제 ${counts.questions}개`, counts.cards > 0 && `플래시카드 ${counts.cards}장`, counts.notes > 0 && `노트 ${counts.notes}개`].filter(Boolean).join(', ');
   const nothingToAsk = wants.questions && countOk && !!planLecture && ready && !noSlides && plan.length === 0;
 
   const go = async () => {
@@ -158,7 +161,7 @@ export function GenerateDialog({
     setBusy(false);
     if (!reply.ok) setError(reply.message);
     else {
-      onGenerated(reply.text, reply.truncated === true, planned.length > 0 ? planned : undefined);
+      onGenerated(reply.text, false, planned.length > 0 ? planned : undefined);
       onClose();
     }
   };
@@ -168,28 +171,28 @@ export function GenerateDialog({
       open={open}
       onClose={busy ? () => undefined : onClose}
       wide
-      title="Generate study material with the AI tutor"
+      title="AI로 학습 자료 만들기"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            취소
           </Button>
           <Button variant="primary" disabled={busy || !usable || !consent || picked.size === 0 || tooBig || none || badRange || markdown.length < 20 || (wants.questions && !countOk)} onClick={() => void go()}>
-            {busy ? 'Writing…' : 'Generate and check'}
+            {busy ? '쓰는 중…' : '만들고 확인하기'}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4 text-sm">
-        <p className="max-w-prose text-ink-2">The AI drafts flashcards and exam questions from your slides. Nothing is saved yet: you see a checking screen first, where every quote it cites is looked up on your real slides and every item waits for your approval.</p>
+        <p className="max-w-prose text-ink-2">AI가 슬라이드로 플래시카드와 시험 문제 초안을 씁니다. 아직 아무것도 저장하지 않습니다. 먼저 확인 화면에서 인용문을 모두 실제 슬라이드와 대조하고, 모든 항목은 승인을 기다립니다.</p>
         {!usable && (
           <p className="rounded-[var(--radius-control)] border border-warn/40 bg-warn-soft/40 px-3 py-2">
-            {ai.phase === 'unavailable' ? 'AI is not available in this copy of the app.' : ai.phase === 'ready' ? (ai.status?.reasons[0] ?? 'AI is off.') : 'AI is not set up, or you are signed out.'}{' '}
-            {ai.phase !== 'unavailable' && <Link to="/settings" className="text-accent underline underline-offset-2">Open Settings → AI</Link>}
+            {blocker}{' '}
+            {ai.phase === 'ready' && <Link to="/settings" className="text-accent underline underline-offset-2">설정 → AI 열기</Link>}
           </p>
         )}
         <fieldset>
-          <legend className="font-medium">Lectures</legend>
+          <legend className="font-medium">강의</legend>
           <ul className="mt-1 flex flex-col gap-1">
             {lectures.map((l) => (
               <li key={l.id}>
@@ -205,37 +208,37 @@ export function GenerateDialog({
                       setPicked(next);
                     }}
                   />
-                  {l.title} <span className="text-ink-3">({l.slideCount} slides)</span>
+                  {l.title} <span className="text-ink-3">(슬라이드 {l.slideCount}장)</span>
                 </label>
                 {picked.has(l.id) && l.slideCount > 1 && (
                   <div className="ml-6 mt-1 flex flex-wrap items-center gap-2 text-ink-2">
-                    <span>Only send slides</span>
+                    <span>보낼 슬라이드 범위</span>
                     <TextInput
                       inputMode="numeric"
-                      aria-label={`First slide of ${l.title}`}
+                      aria-label={`${l.title}의 첫 슬라이드`}
                       className="!w-16 !min-h-8 text-center"
                       value={ranges[l.id]?.from ?? '1'}
                       onChange={(e) => setRanges({ ...ranges, [l.id]: { from: e.target.value.replace(/\D/g, ''), to: ranges[l.id]?.to ?? String(l.slideCount) } })}
                     />
-                    <span aria-hidden>to</span>
+                    <span aria-hidden>~</span>
                     <TextInput
                       inputMode="numeric"
-                      aria-label={`Last slide of ${l.title}`}
+                      aria-label={`${l.title}의 마지막 슬라이드`}
                       className="!w-16 !min-h-8 text-center"
                       value={ranges[l.id]?.to ?? String(l.slideCount)}
                       onChange={(e) => setRanges({ ...ranges, [l.id]: { from: ranges[l.id]?.from ?? '1', to: e.target.value.replace(/\D/g, '') } })}
                     />
-                    {!rangeOf(l).ok && <span role="alert" className="text-bad">Use whole slide numbers from 1 to {l.slideCount}, first not after last.</span>}
+                    {!rangeOf(l).ok && <span role="alert" className="text-bad">슬라이드 번호는 1부터 {l.slideCount}까지의 정수로 쓰고, 첫 번호가 마지막 번호보다 크면 안 됩니다.</span>}
                   </div>
                 )}
               </li>
             ))}
           </ul>
-          {wants.questions && chosen.length > 1 && <p className="mt-1 text-ink-2">Exam questions are planned one lecture at a time, so only “{sending[0]?.title}” is used for them.</p>}
+          {wants.questions && chosen.length > 1 && <p className="mt-1 text-ink-2">시험 문제는 강의 하나씩 계획하므로 “{sending[0]?.title}”만 씁니다.</p>}
         </fieldset>
         {planLecture && planLecture.report.topics.length > 1 && (
           <details className="rounded-[var(--radius-control)] border border-rule">
-            <summary className="cursor-pointer px-3 py-2 font-medium">Topics to ask about ({planLecture.report.topics.filter((t) => !topicOff.has(`${planLecture.id}:${t.id}`)).length} of {planLecture.report.topics.length})</summary>
+            <summary className="cursor-pointer px-3 py-2 font-medium">물어볼 주제({planLecture.report.topics.length}개 중 {planLecture.report.topics.filter((t) => !topicOff.has(`${planLecture.id}:${t.id}`)).length}개)</summary>
             <ul className="flex flex-col gap-1 border-t border-rule px-3 py-2">
               {planLecture.report.topics.map((t) => (
                 <li key={t.id}>
@@ -252,7 +255,7 @@ export function GenerateDialog({
                       }}
                     />
                     <span className="min-w-0 truncate">{t.title}</span>
-                    <span className="shrink-0 text-ink-3">{t.startSlide === t.endSlide ? `slide ${t.startSlide}` : `slides ${t.startSlide}–${t.endSlide}`}</span>
+                    <span className="shrink-0 text-ink-3">{t.startSlide === t.endSlide ? `슬라이드 ${t.startSlide}` : `슬라이드 ${t.startSlide}–${t.endSlide}`}</span>
                   </label>
                 </li>
               ))}
@@ -262,60 +265,60 @@ export function GenerateDialog({
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {(['cards', 'questions', 'notes'] as const).map((k) => (
             <label key={k} className="flex items-center gap-2">
-              <input type="checkbox" className="accent-[var(--accent)]" checked={wants[k]} onChange={(e) => setWants({ ...wants, [k]: e.target.checked })} /> {k === 'cards' ? 'Flashcards' : k === 'questions' ? 'Exam questions' : 'Notes'}
+              <input type="checkbox" className="accent-[var(--accent)]" checked={wants[k]} onChange={(e) => setWants({ ...wants, [k]: e.target.checked })} /> {k === 'cards' ? '플래시카드' : k === 'questions' ? '시험 문제' : '노트'}
             </label>
           ))}
           {(wants.cards || wants.notes) && (
             <label className="flex items-center gap-2">
-              How many
+              양
               <Select value={amount} onChange={(e) => setAmount(e.target.value as typeof amount)} className="w-auto">
-                <option value="few">A few</option>
-                <option value="normal">A normal set</option>
-                <option value="many">Many</option>
+                <option value="few">조금</option>
+                <option value="normal">보통</option>
+                <option value="many">많이</option>
               </Select>
             </label>
           )}
           {wants.questions && (
             <label className="flex items-center gap-2">
-              Exam questions to plan
-              <TextInput inputMode="numeric" aria-label="Number of exam questions to plan" className="!w-16 !min-h-8 text-center" value={questionCount} onChange={(e) => setQuestionCount(e.target.value.replace(/\D/g, ''))} />
+              계획할 시험 문제 수
+              <TextInput inputMode="numeric" aria-label="계획할 시험 문제 수" className="!w-16 !min-h-8 text-center" value={questionCount} onChange={(e) => setQuestionCount(e.target.value.replace(/\D/g, ''))} />
             </label>
           )}
         </div>
-        {wants.questions && !countOk && <p role="alert" className="text-bad">Plan between 1 and {MAX_QUESTIONS} questions.</p>}
+        {wants.questions && !countOk && <p role="alert" className="text-bad">문제는 1개부터 {MAX_QUESTIONS}개까지 계획할 수 있습니다.</p>}
         {countText && (
           <p className="text-ink-2">
-            This request asks for {countText}. The free AI writes at most about {outputCap.toLocaleString()} tokens per answer, so a bigger set needs several requests on different slides, each one shown to you first.
+            이 요청은 {countText}을(를) 요구합니다. AI는 답 하나에 약 {outputCap.toLocaleString('ko-KR')}토큰까지만 쓰도록 요청받으므로, 더 큰 세트는 다른 슬라이드로 여러 번 요청해야 하며 매번 먼저 보여 드립니다.
           </p>
         )}
         {wants.questions && plan.length > 0 && (
-          <section aria-label="Exam plan" className="rounded-[var(--radius-control)] border border-rule bg-sunken/40 px-3 py-2">
+          <section aria-label="시험 계획" className="rounded-[var(--radius-control)] border border-rule bg-sunken/40 px-3 py-2">
             <h3 className="font-medium">
-              Exam plan: {plan.length} question{plan.length === 1 ? '' : 's'}, {requests.length} request{requests.length === 1 ? '' : 's'}
+              시험 계획: 문제 {plan.length}개, 요청 {requests.length}번
             </h3>
-            <p className="text-ink-2">A sensible mix for this material, made on your device. It is not a prediction of your real exam{course.examStyle?.trim() ? ', and it follows the exam instructions you saved' : ''}. This request writes the first {thisRequest.length}; after you import them, open this again for the next ones: it will skip what you already have.</p>
+            <p className="text-ink-2">이 자료에 맞게 내 기기에서 짠 구성입니다. 실제 시험을 예측하지 않습니다{course.examStyle?.trim() ? '. 저장한 출제 안내를 따릅니다' : ''}. 이번 요청은 처음 {thisRequest.length}개를 씁니다. 가져온 뒤 다시 열면 다음 문제를 쓰며, 이미 있는 문제는 건너뜁니다.</p>
             <ol className="mt-2 flex list-decimal flex-col gap-0.5 pl-5 text-[13px] text-ink-2">
               {plan.map((s) => (
                 <li key={s.n} className={thisRequest.some((x) => x.n === s.n) ? 'font-medium text-ink' : ''}>
                   {describeSlot(s)}
-                  {thisRequest.some((x) => x.n === s.n) ? ' (this request)' : ''}
+                  {thisRequest.some((x) => x.n === s.n) ? ' (이번 요청)' : ''}
                 </li>
               ))}
             </ol>
           </section>
         )}
-        {nothingToAsk && <p className="text-ink-2">These slides have too little text to plan exam questions from, so the request will ask for a general set instead.</p>}
+        {nothingToAsk && <p className="text-ink-2">이 슬라이드는 텍스트가 너무 적어 시험 문제를 계획할 수 없으므로 일반적인 세트를 요청합니다.</p>}
         <details className="rounded-[var(--radius-control)] border border-rule bg-sunken/40">
           <summary className="cursor-pointer px-3 py-2 font-medium">
-            What will be sent to Google: the text of {sending.length} lecture{sending.length === 1 ? '' : 's'}
-            {sending.map((l) => (rangeOf(l).ok && l.slideCount > 1 && (rangeOf(l).from !== 1 || rangeOf(l).to !== l.slideCount) ? `, slides ${rangeOf(l).from}–${rangeOf(l).to} of ${l.title}` : '')).join('')} (about {Math.round(markdown.length / 4).toLocaleString()} tokens)
+            {dest.sentTo}에 보낼 내용: 강의 {sending.length}개의 텍스트
+            {sending.map((l) => (rangeOf(l).ok && l.slideCount > 1 && (rangeOf(l).from !== 1 || rangeOf(l).to !== l.slideCount) ? `, ${l.title}의 슬라이드 ${rangeOf(l).from}–${rangeOf(l).to}` : '')).join('')}(약 {Math.round(markdown.length / 4).toLocaleString('ko-KR')}토큰)
           </summary>
           <div className="border-t border-rule px-3 py-3">
-            <pre className="max-h-56 overflow-auto whitespace-pre-wrap font-mono text-xs">{markdown || '(choose a lecture)'}</pre>
-            {planned.length > 0 && <p className="mt-2 text-ink-2">Also sent: the plan above for this request ({planned.length} question{planned.length === 1 ? '' : 's'}: kind, difficulty, marks, topic and slides of each).</p>}
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap font-mono text-xs">{markdown || '(강의를 고르세요)'}</pre>
+            {planned.length > 0 && <p className="mt-2 text-ink-2">함께 보내는 것: 이번 요청의 위 계획(문제 {planned.length}개마다 유형, 난이도, 배점, 주제, 슬라이드).</p>}
             {planned.length > 0 && alreadyAsked.length > 0 && (
               <div className="mt-2 text-ink-2">
-                <p>Also sent, so they are not repeated: the wording of {alreadyAsked.length} question{alreadyAsked.length === 1 ? '' : 's'} you already have for this lecture.</p>
+                <p>반복하지 않도록 함께 보내는 것: 이 강의에 이미 있는 문제 {alreadyAsked.length}개의 문장.</p>
                 <ul className="mt-1 max-h-24 list-disc overflow-y-auto pl-5 text-[13px]">
                   {alreadyAsked.map((a, i) => (
                     <li key={i}>{a}</li>
@@ -323,15 +326,15 @@ export function GenerateDialog({
                 </ul>
               </div>
             )}
-            <p className="mt-2 text-ink-2">Plus fixed instructions for the format. Only slide text is sent, never pictures, files or account details.</p>
+            <p className="mt-2 text-ink-2">그리고 형식에 대한 고정 지시문을 보냅니다. 슬라이드 텍스트만 보내며 그림, 파일, 계정 정보는 보내지 않습니다.</p>
           </div>
         </details>
-        {noSlides && <p role="alert" className="text-bad">No slides are left to send. Switch a topic back on or widen the slide range.</p>}
-        {tooBig && <p role="alert" className="text-bad">That is too much text for one request. Choose fewer lectures.</p>}
+        {noSlides && <p role="alert" className="text-bad">보낼 슬라이드가 남아 있지 않습니다. 주제를 다시 켜거나 슬라이드 범위를 넓히세요.</p>}
+        {tooBig && <p role="alert" className="text-bad">요청 한 번에 보내기에는 텍스트가 너무 많습니다. 강의를 줄여서 고르세요.</p>}
         {!consent && usable && (
           <label className="flex items-start gap-2 rounded-[var(--radius-control)] border border-warn/40 bg-warn-soft/40 p-3">
             <input type="checkbox" className="mt-0.5 size-4 accent-[var(--accent)]" onChange={(e) => e.target.checked && void setConsent(new Date().toISOString().slice(0, 10))} />
-            <span>I understand this text is sent to Google’s free Gemini service and may be used by Google to improve its products.</span>
+            <span>{dest.consent}</span>
           </label>
         )}
         {error && (

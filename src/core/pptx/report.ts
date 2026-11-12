@@ -10,37 +10,37 @@ export function scoreSlide(slide: SlideData): Confidence {
 
 /** Plain-language label per flag code, used in the "potentially missing content" list. */
 const MISSING_LABEL: Partial<Record<FlagCode, string>> = {
-  SLIDE_PARSE_FAILED: 'Slide could not be read at all',
-  NO_EXTRACTABLE_TEXT: 'No extractable text: content is in pictures/objects (type it in to use it)',
-  LARGE_PICTURE: 'Picture that may hold text or a diagram (not read automatically)',
-  UNRENDERABLE_IMAGE: 'Image in a format the browser cannot show (EMF/WMF/TIFF)',
-  MISSING_MEDIA: 'Image that is missing or could not be read',
-  SMARTART: 'SmartArt: text was read but arrangement/hierarchy is inferred',
-  CHART_NO_DATA: 'Chart whose data could not be read',
-  OLE_OBJECT: 'Embedded object whose contents are not extracted',
-  EQUATION_OBJECT: 'Old-style equation object (picture only, no formula text)',
-  MATH_PARTIAL: 'Equation that was only partially converted',
-  EMBEDDED_MEDIA: 'Embedded video/audio (not extracted)',
-  INK: 'Handwritten ink (not extracted)',
-  UNSUPPORTED_OBJECT: 'Unsupported object that was not extracted',
-  SYMBOL_FONT: 'Symbol-font characters that may be mis-decoded',
-  TEXT_NOT_CAPTURED: 'Text in an unsupported container (kept under "Unplaced text")',
-  NESTING_LIMIT: 'Deeply nested groups that were not fully read',
-  HIDDEN_SHAPE: 'Hidden shapes with text (kept, not shown)',
+  SLIDE_PARSE_FAILED: '전혀 읽지 못한 슬라이드',
+  NO_EXTRACTABLE_TEXT: '추출할 텍스트 없음: 내용이 그림이나 개체 안에 있음(직접 입력하면 사용 가능)',
+  LARGE_PICTURE: '텍스트나 도식이 들어 있을 수 있는 그림(자동으로 읽지 않음)',
+  UNRENDERABLE_IMAGE: '브라우저가 표시할 수 없는 형식의 이미지(EMF/WMF/TIFF)',
+  MISSING_MEDIA: '없거나 읽지 못한 이미지',
+  SMARTART: 'SmartArt: 텍스트는 읽었지만 배치와 위계는 추정함',
+  CHART_NO_DATA: '데이터를 읽지 못한 차트',
+  OLE_OBJECT: '내용을 추출하지 않은 포함 개체',
+  EQUATION_OBJECT: '구형 수식 개체(그림만 있고 수식 텍스트 없음)',
+  MATH_PARTIAL: '일부만 변환된 수식',
+  EMBEDDED_MEDIA: '포함된 동영상/오디오(추출하지 않음)',
+  INK: '손글씨 잉크(추출하지 않음)',
+  UNSUPPORTED_OBJECT: '지원하지 않아 추출하지 않은 개체',
+  SYMBOL_FONT: '잘못 해석되었을 수 있는 기호 글꼴 문자',
+  TEXT_NOT_CAPTURED: '지원하지 않는 컨테이너 속 텍스트("Unplaced text" 아래에 보관)',
+  NESTING_LIMIT: '끝까지 읽지 못한 깊게 중첩된 그룹',
+  HIDDEN_SHAPE: '텍스트가 있는 숨긴 도형(보관하지만 표시하지 않음)',
 };
 
 const LIMITATIONS = [
-  'Text inside pictures, screenshots and scanned images is not read automatically. Where a picture holds words, you can type them in; they are then used as study text and marked as typed by you.',
-  'The slide preview is rebuilt from the file’s XML. Fonts, gradients, effects and SmartArt arrangement can differ from PowerPoint; the extracted text is the source of truth.',
-  'Animations and transitions are not captured; animated content is extracted as if fully revealed.',
-  'Equations are converted from PowerPoint’s equation format to LaTeX on a best-effort basis; verify important formulas against the original.',
-  'Embedded video, audio, ink and OLE objects are not extracted.',
-  'Speaker notes are extracted as plain text (formatting is dropped).',
+  '그림, 스크린샷, 스캔한 이미지 속 텍스트는 자동으로 읽지 않습니다. 그림에 글자가 있으면 직접 입력할 수 있고, 입력한 글자는 학습 텍스트로 쓰이며 내가 입력한 것으로 표시됩니다.',
+  '슬라이드 미리보기는 파일의 XML로 다시 그린 것입니다. 글꼴, 그라데이션, 효과, SmartArt 배치는 PowerPoint와 다를 수 있으며, 추출한 텍스트가 기준입니다.',
+  '애니메이션과 전환 효과는 담지 않습니다. 애니메이션이 있는 내용은 모두 나타난 상태로 추출합니다.',
+  '수식은 PowerPoint 수식 형식에서 LaTeX로 최대한 변환합니다. 중요한 공식은 원본과 대조하세요.',
+  '포함된 동영상, 오디오, 잉크, OLE 개체는 추출하지 않습니다.',
+  '발표자 노트는 일반 텍스트로 추출합니다(서식은 빠집니다).',
 ];
 
 function listSlides(nums: number[]): string {
   const sorted = [...new Set(nums)].sort((a, b) => a - b);
-  if (sorted.length > 12) return `${sorted.slice(0, 12).join(', ')} … (+${sorted.length - 12} more)`;
+  if (sorted.length > 12) return `${sorted.slice(0, 12).join(', ')} … (외 ${sorted.length - 12}장)`;
   return sorted.join(', ');
 }
 
@@ -61,8 +61,7 @@ export function buildReport(slides: SlideData[], topics: Topic[], deckFlags: Fla
   for (const [code, label] of Object.entries(MISSING_LABEL) as [FlagCode, string][]) {
     const nums = slidesByCode.get(code);
     if (nums && nums.length > 0) {
-      const distinct = new Set(nums).size;
-      potentiallyMissing.push(`${label} — slide${distinct > 1 ? 's' : ''} ${listSlides(nums)}`);
+      potentiallyMissing.push(`${label} — 슬라이드 ${listSlides(nums)}`);
     }
   }
 
@@ -98,8 +97,8 @@ export function buildReport(slides: SlideData[], topics: Topic[], deckFlags: Fla
   };
 }
 
-/** Slide-based lines of `potentiallyMissing` end with the slide numbers; deck-level ones do not. */
-const SLIDE_BASED = / — slides? [\d, ]+(…\s*\(\+\d+ more\))?$/;
+/** Slide-based lines of `potentiallyMissing` end with the slide numbers; deck-level ones do not. Reports saved before the Korean wording still say "slide". */
+const SLIDE_BASED = / — (?:slides? |슬라이드 )[\d, ]+(…\s*\((?:\+\d+ more|외 \d+장)\))?$/;
 
 /** The report again for the same deck after slides changed (for example the student typed picture text). */
 export function rebuildReport(previous: ExtractionReport, slides: SlideData[]): ExtractionReport {

@@ -29,9 +29,9 @@ describe('lecture notes from slides', () => {
     const { lecture, slides } = await setup();
     const blocks = lectureNotesFromSlides(lecture, slides);
     expect(blocks).toHaveLength(2);
-    expect(blocks[0]!.text).toContain('## Slide 1: Intro');
+    expect(blocks[0]!.text).toContain('## 슬라이드 1: Intro');
     expect(blocks[0]!.text).toContain('- First point');
-    expect(blocks[0]!.text).toContain('**Speaker notes:** say hello');
+    expect(blocks[0]!.text).toContain('**발표자 노트:** say hello');
     expect(blocks[0]).toMatchObject({ origin: 'auto', basis: 'lecture' });
     expect(blocks[0]!.sources[0]).toMatchObject({ lectureId: lecture.id, slide: 1, verified: true, rev: 1 });
     expect(blocks[1]!.sources[0]!.slide).toBe(3); // slide numbers keep their original positions
@@ -60,8 +60,8 @@ describe('notes store: your edits are never confused with generated text', () =>
     expect((await db.notes.get(note.id))!.blocks[0]).toMatchObject({ id: 'blk1', origin: 'user', text: 'hello' });
     await renameNote(db, note.id, 'Renamed');
     expect((await db.notes.get(note.id))!.title).toBe('Renamed');
-    await expect(renameNote(db, note.id, '  ')).rejects.toThrow(/needs a title/);
-    await expect(createNote(db, { courseId: course.id, title: '' })).rejects.toThrow(/needs a title/);
+    await expect(renameNote(db, note.id, '  ')).rejects.toThrow(/노트에는 제목이 있어야 합니다/);
+    await expect(createNote(db, { courseId: course.id, title: '' })).rejects.toThrow(/노트에는 제목이 있어야 합니다/);
     await deleteNote(db, note.id);
     expect(await db.notes.count()).toBe(0);
   });
@@ -91,7 +91,7 @@ describe('exports', () => {
     const note = await createNote(db, { courseId: course.id, title: 'Notes', blocks: lectureNotesFromSlides(lecture, slides) });
     const md = noteToMarkdown(note, (id) => (id === lecture.id ? 'Lecture 1' : undefined));
     expect(md.startsWith('# Notes\n')).toBe(true);
-    expect(md).toContain('<sub>Auto-extracted from slides · On the slides · Lecture 1, slide 1</sub>');
+    expect(md).toContain('<sub>슬라이드에서 자동 추출 · 슬라이드에 있음 · Lecture 1, 슬라이드 1</sub>');
   });
 
   it('HTML is self-contained, converts maths to MathML and never passes raw HTML through', async () => {
@@ -103,7 +103,7 @@ describe('exports', () => {
     expect(html).not.toMatch(/javascript:/i);
     expect(html).toContain('href="https://example.com"'); // legitimate links survive
     expect(html).not.toMatch(/<img|evil.example/i); // no remote loads when the file is opened
-    expect(html).toContain('[image: tracker]');
+    expect(html).toContain('[이미지: tracker]');
     const { course } = await setup();
     const note = await createNote(db, { courseId: course.id, title: 'A <b>title</b> & more', blocks: [{ text: 'hi', origin: 'user', basis: 'outside', sources: [] }] });
     const doc = await noteToHtmlDocument(note, () => undefined);

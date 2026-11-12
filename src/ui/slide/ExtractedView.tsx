@@ -13,24 +13,24 @@ export function blockLabel(el: SlideElement): string | undefined {
   switch (el.kind) {
     case 'shape':
       if (!el.paragraphs.some((p) => p.text.trim())) return undefined;
-      if (el.role === 'title') return 'Title';
-      if (el.role === 'subtitle') return 'Subtitle';
-      if (el.role === 'body') return 'Body';
-      return el.isTextBox ? 'Text box' : el.role ? 'Text' : 'Shape text';
+  if (el.role === 'title') return '제목';
+  if (el.role === 'subtitle') return '부제목';
+  if (el.role === 'body') return '본문';
+  return el.isTextBox ? '텍스트 상자' : el.role ? '텍스트' : '도형 텍스트';
     case 'table':
-      return 'Table';
+      return '표';
     case 'chart':
-      return 'Chart';
+      return '차트';
     case 'smartart':
-      return 'Diagram';
+      return '도식';
     case 'picture':
-      return 'Picture';
+      return '그림';
     case 'ole':
-      return 'Object';
+      return '개체';
     case 'media':
-      return 'Media';
+      return '미디어';
     case 'unsupported':
-      return 'Unsupported';
+      return '지원하지 않음';
     default:
       return undefined;
   }
@@ -131,13 +131,13 @@ function BlockBody({ el, media, slide, onSavePictureText }: { el: SlideElement; 
       return el.chart ? (
         <div className="overflow-x-auto">
           <p className="font-serif font-semibold">
-            {el.chart.title ?? 'Untitled chart'} <span className="font-sans text-sm font-normal text-ink-3">({el.chart.chartType})</span>
+            {el.chart.title ?? '제목 없는 차트'} <span className="font-sans text-sm font-normal text-ink-3">({el.chart.chartType})</span>
           </p>
           <table className="mt-1 w-full border-collapse font-serif text-[0.95rem]">
             <thead>
               <tr>
                 <th className="border border-rule-strong bg-sunken px-2.5 py-1.5 text-left" scope="col">
-                  Series
+                  계열
                 </th>
                 {(el.chart.categories.length ? el.chart.categories : el.chart.series[0]?.values.map((_, i) => String(i + 1)) ?? []).map((c, i) => (
                   <th key={i} scope="col" className="border border-rule-strong bg-sunken px-2.5 py-1.5 text-left">
@@ -163,12 +163,12 @@ function BlockBody({ el, media, slide, onSavePictureText }: { el: SlideElement; 
           </table>
         </div>
       ) : (
-        <p className="text-sm text-bad">No data could be read from this chart.</p>
+        <p className="text-sm text-bad">이 차트에서 데이터를 읽지 못했습니다.</p>
       );
     case 'smartart':
       return (
         <ul className="font-serif text-[1.0625rem] leading-relaxed">
-          {el.outline.length === 0 && <li className="font-sans text-sm text-bad">No text could be read from this diagram.</li>}
+          {el.outline.length === 0 && <li className="font-sans text-sm text-bad">이 도식에서 텍스트를 읽지 못했습니다.</li>}
           {el.outline.map((n, i) => (
             <li key={i} style={{ paddingLeft: `${n.depth * 1.25}rem` }} className="before:mr-2 before:text-ink-3 before:content-['–']">
               {n.text}
@@ -184,20 +184,20 @@ function BlockBody({ el, media, slide, onSavePictureText }: { el: SlideElement; 
             <img src={url} alt={el.alt ?? ''} className="max-h-40 max-w-full rounded border border-rule bg-white object-contain" />
           ) : (
             <span className="inline-flex items-center gap-2 rounded border border-dashed border-rule-strong px-3 py-2 text-sm text-ink-2">
-              <ImageOff className="size-4" aria-hidden /> Image not shown
+              <ImageOff className="size-4" aria-hidden /> 이미지를 표시할 수 없음
             </span>
           )}
-          <p className="min-w-0 flex-1 text-sm text-ink-2">{describePicture(el.alt) ? `${describePicture(el.alt)!.auto ? 'Automatic description (may be wrong)' : 'Alt text'}: ${describePicture(el.alt)!.text}` : 'No useful alt text. Any text inside the picture is not extracted.'}</p>
+          <p className="min-w-0 flex-1 text-sm text-ink-2">{describePicture(el.alt) ? `${describePicture(el.alt)!.auto ? '자동 설명(틀릴 수 있음)' : '대체 텍스트'}: ${describePicture(el.alt)!.text}` : '쓸 만한 대체 텍스트가 없습니다. 그림 속 텍스트는 추출하지 않습니다.'}</p>
           {onSavePictureText && !el.decorative && <PictureTextEditor saved={pictureTextOf(slide, el.id)} onSave={(text) => onSavePictureText(el.id, text)} />}
         </div>
       );
     }
     case 'ole':
-      return <p className="text-sm text-ink-2">Embedded object{el.progId ? ` (${el.progId})` : ''}. Its contents are not extracted.</p>;
+      return <p className="text-sm text-ink-2">포함 개체{el.progId ? `(${el.progId})` : ''}입니다. 내용은 추출하지 않습니다.</p>;
     case 'media':
-      return <p className="text-sm text-ink-2">Embedded {el.mediaKind}. Play it in PowerPoint.</p>;
+      return <p className="text-sm text-ink-2">포함된 {el.mediaKind === 'video' ? '동영상' : '오디오'}입니다. PowerPoint에서 재생하세요.</p>;
     case 'unsupported':
-      return <p className="text-sm text-ink-2">{el.what} was not extracted.</p>;
+      return <p className="text-sm text-ink-2">{el.what}: 추출하지 않았습니다.</p>;
     default:
       return null;
   }
@@ -228,10 +228,10 @@ export function ExtractedView({
   const unplaced = slide.text.includes('[Unplaced text]') ? slide.text.slice(slide.text.indexOf('[Unplaced text]') + '[Unplaced text]'.length).trim() : '';
 
   if (slide.status === 'failed') {
-    return <p className="rounded-[var(--radius-panel)] bg-bad-soft p-4 text-sm text-bad">This slide could not be read. None of its content is available here; open the original file in PowerPoint.</p>;
+    return <p className="rounded-[var(--radius-panel)] bg-bad-soft p-4 text-sm text-bad">이 슬라이드를 읽지 못했습니다. 여기서는 내용을 전혀 볼 수 없으니 원본 파일을 여세요.</p>;
   }
   if (blocks.length === 0 && !unplaced) {
-    return <p className="text-sm text-ink-2">This slide has no extractable content.</p>;
+    return <p className="text-sm text-ink-2">이 슬라이드에는 추출할 수 있는 내용이 없습니다.</p>;
   }
 
   return (
@@ -275,7 +275,7 @@ export function ExtractedView({
       })}
       {unplaced && (
         <article className="grid gap-x-4 border-t border-rule py-3.5 md:grid-cols-[5.5rem_minmax(0,1fr)]">
-          <h3 className="px-2 text-xs font-medium text-bad md:pt-1.5 md:text-right">Unplaced text</h3>
+          <h3 className="px-2 text-xs font-medium text-bad md:pt-1.5 md:text-right">위치를 못 찾은 텍스트</h3>
           <div className="min-w-0 whitespace-pre-wrap px-2 font-serif text-[1.0625rem] md:border-l md:border-bad md:pl-4">{unplaced}</div>
         </article>
       )}
@@ -293,27 +293,27 @@ export function ChecksView({ slide }: { slide: SlideData }) {
       <div className="flex flex-wrap items-center gap-3">
         <ConfidencePill value={slide.confidence} />
         <span className="text-sm text-ink-2">
-          Text coverage: {slide.coverage.rawChars === 0 ? 'no text boxes' : `${Math.min(100, Math.round((slide.coverage.capturedChars / Math.max(1, slide.coverage.rawChars)) * 100))}% of text in the file was captured`}
+          텍스트 추출률: {slide.coverage.rawChars === 0 ? '텍스트 상자 없음' : `파일 속 텍스트의 ${Math.min(100, Math.round((slide.coverage.capturedChars / Math.max(1, slide.coverage.rawChars)) * 100))}%를 추출함`}
         </span>
       </div>
       {flags.length === 0 ? (
         <p className="flex items-start gap-2 text-sm text-ink-2">
           <CircleCheck className="mt-0.5 size-4 shrink-0 text-ok" aria-hidden />
-          No extraction problems were detected on this slide.{hasPictures ? ' Text inside pictures is not read automatically: type it under the picture if it matters.' : ''}
+          이 슬라이드에서는 추출 문제를 찾지 못했습니다.{hasPictures ? ' 그림 속 텍스트는 자동으로 읽지 않으니 중요하다면 그림 아래에 입력하세요.' : ''}
         </p>
       ) : (
         <ul className="flex flex-col gap-2.5">
           {flags.map((f, i) => (
             <li key={i} className={`flex items-start gap-2 text-sm ${f.resolved ? 'text-ink-2' : 'text-ink'}`}>
               <span className="mt-0.5 shrink-0">{f.resolved ? <CircleCheck className="size-4 text-ok" aria-hidden /> : <SeverityIcon severity={f.severity} />}</span>
-              <span>{f.resolved ? `Settled, you typed the picture’s words: ${f.message}` : f.message}</span>
+              <span>{f.resolved ? `해결됨, 그림의 글자를 입력했습니다: ${f.message}` : f.message}</span>
             </li>
           ))}
         </ul>
       )}
       <p className="flex items-start gap-2 text-[13px] text-ink-3">
         <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-        The preview on the left is rebuilt from the file’s data. Fonts, effects and some shapes can look different in PowerPoint.
+        왼쪽 미리보기는 파일 데이터로 다시 그린 것입니다. 글꼴, 효과, 일부 도형은 원본과 다르게 보일 수 있습니다.
       </p>
     </div>
   );

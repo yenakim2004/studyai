@@ -1,48 +1,30 @@
-# Contributing
+# 기여 안내
 
-StudyAI is a small project kept by one person. Issues and pull requests are welcome, answered when time allows, and
-not guaranteed to be merged: the project has a narrow purpose (a private, local-first study tool that can never spend
-money by accident), and a change that widens it may be declined with thanks.
+StudyAI는 강의 자료를 이 기기에 저장하고, 연결한 ChatGPT 플랜으로 학습하는 앱입니다. 실제 강의 자료나 계정 정보를 코드와 테스트에 포함하지 마세요. 보안 문제는 공개 이슈 대신 [보안 안내](SECURITY.md)를 따릅니다.
 
-## Before you start
+## 개발과 검사
 
-* Open an issue first for anything bigger than a typo or a small bug fix, so the work is not wasted.
-* **Security problems are not issues.** Follow [SECURITY.md](SECURITY.md) and report them privately.
-* Do not include lecture slides, study packs, exports, API keys or anything personal in an issue, a pull request or a
-  test. Tests use synthetic decks built by `tests/fixtures/pptx-builder.ts` (invented content only).
-
-## Run it and check your change
+Node.js 22 이상과 pnpm 11을 사용합니다.
 
 ```bash
-pnpm install --frozen-lockfile   # exact, pinned versions; Node 22+ and pnpm 11
-pnpm check                       # types, Worker types, unit tests and the browser tests (needs Chrome installed)
-pnpm scan:secrets                # working tree and full git history
+pnpm install --frozen-lockfile
+pnpm check
+pnpm scan:secrets
+pnpm check:attribution
 ```
 
-`pnpm check` takes a few minutes. The browser tests start the real local Worker and Durable Object with a scripted fake
-Gemini; no network and no Google account are involved, and no real AI request is ever made by the test suite.
+`pnpm check`는 타입 검사, Worker 타입 검사, 단위 테스트와 브라우저 테스트를 실행합니다. 브라우저 테스트에는 Chrome이 필요합니다. 테스트용 OpenAI 서버와 합성 강의 파일을 사용하며 실제 계정이나 외부 AI를 호출하지 않습니다.
 
-The browser tests use the local ports 4391, 4392, 8792, 8793 and 8795. If your system has reserved them (on Windows the tests
-then stop with `listen EACCES`; `netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges), move all five with one
-variable, for example `STUDYAI_E2E_PORT_BASE=24000 pnpm check` (it uses 24000 to 24004). The ports are defined in `tests/e2e/ports.ts`.
+기본 테스트 포트는 `tests/e2e/ports.ts`에 있습니다. 다른 프로그램과 충돌하면 `STUDYAI_E2E_PORT_BASE=24000 pnpm check`처럼 시작 포트를 지정하세요. 테스트 상태는 실제 앱의 `.studyai-local/`과 분리합니다.
 
-## What a good change looks like
+## 변경 원칙
 
-* **A test that fails without it.** Fix a defect by first writing the test that shows it, using the real failing input
-  (synthetic, if the real one is private). A new rule in the exam planner or the question checks needs a test for what it
-  finds and for what it must leave alone.
-* **Honest wording.** The app says what it knows and what it does not (an estimate is labelled an estimate; a slide that
-  says nothing is said to say nothing). Keep it that way in the interface and in documentation.
-* **The safety rules hold.** Nothing may send lecture text anywhere without the student seeing it first; the browser never
-  supplies a prompt, a model or an output length; AI stays off and fails closed if a budget, a quota or a billing fact is
-  unclear. Read [docs/FINANCIAL-SAFETY.md](docs/FINANCIAL-SAFETY.md) before touching `src/core/ai/` or `worker/`.
-* **Small, readable commits** with a message that says why. Record a decision that is not obvious in
-  [docs/DECISIONS.md](docs/DECISIONS.md).
-* **No AI co-author trailers.** A commit message never names an AI tool as co-author or assistant (`Co-Authored-By: Claude`,
-  "Generated with ..." footers and the like); human co-authors are welcome. CI runs `pnpm check:attribution` on every pull request.
+- 학생이 전송할 내용을 확인하기 전에 강의 자료를 외부 서비스로 보내지 않습니다.
+- 근거가 없는 답변과 추출하지 못한 내용은 명확히 표시합니다. 스캔 PDF에서 글자를 읽었다고 가정하지 않습니다.
+- 연결한 ChatGPT 계정의 인증 정보는 서버에서만 처리합니다. 브라우저 응답, 로그, 백업, 저장소에 토큰을 넣지 않습니다.
+- 로컬 API의 주소·출처 검증과 공개 배포 시 AI 차단을 유지합니다.
+- 사용자에게 보이는 문구, 접근성 이름과 기본 학습 응답은 한국어로 작성합니다. 파일 형식과 저장된 식별자는 문구 번역과 구분합니다.
+- 동작을 변경하면 실제 입력으로 검증합니다. 테스트용 자료는 직접 만든 합성 파일을 사용합니다.
+- 커밋과 PR에는 변경 이유와 검증 결과만 적습니다. AI 생성 서명이나 AI 공동 작성자 표기를 넣지 않습니다.
 
-## Style
-
-TypeScript in strict mode, the existing naming and comment density, no new dependency without a reason (the project
-resolves only package versions at least seven days old; see `pnpm-workspace.yaml`). `pnpm notices` regenerates
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) when dependencies change.
+TypeScript의 엄격한 타입 검사를 유지합니다. 의존성은 필요한 경우에만 정확한 버전을 추가하고, 저장소의 최소 배포 경과 기간을 지킵니다. 의존성을 바꾼 뒤 `pnpm notices`로 라이선스 고지를 갱신하세요.

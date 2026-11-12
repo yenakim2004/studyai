@@ -14,8 +14,9 @@ describe('the policy that travels inside the demo page', () => {
   it('still allows nothing but the site itself', () => {
     expect(META_CSP).toContain("default-src 'none'");
     const directives = META_CSP.split('; ');
-    for (const d of ['script-src', 'style-src', 'font-src', 'connect-src', 'worker-src']) expect(directives, d).toContain(`${d} 'self'`);
-    expect(META_CSP).not.toMatch(/unsafe-eval|https?:|\*/);
+    expect(directives).toContain("script-src 'self' 'wasm-unsafe-eval'");
+    for (const d of ['style-src', 'font-src', 'connect-src', 'worker-src']) expect(directives, d).toContain(`${d} 'self'`);
+    expect(META_CSP).not.toMatch(/'unsafe-eval'|https?:|\*/);
     expect(directives.filter((d) => d.includes("'unsafe-inline'"))).toEqual(["style-src-attr 'unsafe-inline'"]); // style attributes only, as in the headers
   });
 });
@@ -37,8 +38,8 @@ describe('injectDemoHead', () => {
   });
 
   it('names itself as the demo in the tab and in a link preview', () => {
-    expect(html).toContain('<title>StudyAI demo</title>');
-    expect(html).toMatch(/<meta name="description" content="[^"]*invented[^"]*there is no AI\." \/>/);
+    expect(html).toContain('<title>StudyAI 체험판</title>');
+    expect(html).toMatch(/<meta name="description" content="[^"]*예제 강의[^"]*AI 연결은 제공하지 않습니다\." \/>/);
     expect(html).not.toContain('<title>StudyAI</title>');
   });
 
@@ -50,7 +51,7 @@ describe('injectDemoHead', () => {
   it('leaves the rest of the page as it was', () => {
     const stripped = html
       .replace(/\n {4}<meta http-equiv[^\n]*\n {4}<meta name="referrer"[^\n]*/, '')
-      .replace(/<title>StudyAI demo<\/title>\n {4}<meta name="description"[^\n]*/, '<title>StudyAI</title>');
+      .replace(/<title>StudyAI 체험판<\/title>\n {4}<meta name="description"[^\n]*/, '<title>StudyAI</title>');
     expect(stripped).toBe(INDEX);
   });
 });

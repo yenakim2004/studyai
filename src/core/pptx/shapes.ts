@@ -199,7 +199,7 @@ function parseShape(sp: XNode, xf: Xform, groupPath: string[], ctx: SlideCtx, op
   const prst = attr(child(spPr, 'a:prstGeom'), 'prst');
   const custom = !!child(spPr, 'a:custGeom');
   if (custom && !c.hidden && paragraphs.length === 0) {
-    flag(ctx, 'CUSTOM_GEOMETRY', 'info', 'A freeform shape was found; its outline is approximated in the preview.', c.id);
+    flag(ctx, 'CUSTOM_GEOMETRY', 'info', '자유형 도형이 있습니다. 미리보기에서는 윤곽을 근사해서 보여 줍니다.', c.id);
   }
 
   let fill = colorFromFill(spPr, ctx.colors);
@@ -227,11 +227,11 @@ function parseShape(sp: XNode, xf: Xform, groupPath: string[], ctx: SlideCtx, op
   if (fontScale !== 1) element.fontScale = fontScale;
   if (vert && vert !== 'horz') {
     element.vertical = true;
-    flag(ctx, 'VERTICAL_TEXT', 'info', 'A text box uses vertical text direction, which the preview shows horizontally.', c.id);
+    flag(ctx, 'VERTICAL_TEXT', 'info', '세로 쓰기 텍스트 상자가 있습니다. 미리보기에서는 가로로 보여 줍니다.', c.id);
   }
   const hasText = paragraphs.some((p) => p.text.trim() !== '');
   if (!element.decorative && !c.hidden && (hasText || typeof fill === 'string')) ctx.counts.shapes += 1;
-  if (c.hidden && hasText) flag(ctx, 'HIDDEN_SHAPE', 'info', 'A hidden shape contains text. It is kept in the data but not shown or included in study text.', c.id);
+  if (c.hidden && hasText) flag(ctx, 'HIDDEN_SHAPE', 'info', '숨긴 도형에 텍스트가 있습니다. 데이터에는 보관하지만 표시하거나 학습 텍스트에 넣지 않습니다.', c.id);
   return element;
 }
 
@@ -307,7 +307,7 @@ function parsePicture(pic: XNode, xf: Xform, groupPath: string[], ctx: SlideCtx,
     const el: MediaElement = { kind: 'media', ...baseOf(c, ctx, opts, groupPath, box), mediaKind };
     if (blip.media) el.posterMedia = blip.media;
     ctx.counts.media += 1;
-    flag(ctx, 'EMBEDDED_MEDIA', 'info', `An embedded ${mediaKind} was found. Its content is not extracted; play it in PowerPoint.`, c.id);
+    flag(ctx, 'EMBEDDED_MEDIA', 'info', `포함된 ${mediaKind === 'video' ? '동영상' : '오디오'}이 있습니다. 내용은 추출하지 않으니 PowerPoint에서 재생하세요.`, c.id);
     return el;
   }
 
@@ -322,7 +322,7 @@ function parsePicture(pic: XNode, xf: Xform, groupPath: string[], ctx: SlideCtx,
   if (blip.mime) el.mime = blip.mime;
   if (blip.crop) el.crop = blip.crop;
   if (!opts.decorative && !c.hidden) ctx.counts.pictures += 1;
-  if (!blip.media) flag(ctx, 'MISSING_MEDIA', 'warning', 'A picture refers to an image that is not embedded (linked file or missing).', c.id);
+  if (!blip.media) flag(ctx, 'MISSING_MEDIA', 'warning', '그림이 파일에 포함되지 않은 이미지를 가리킵니다(연결된 파일이거나 없음).', c.id);
   return el;
 }
 
@@ -342,7 +342,7 @@ function parseTable(tbl: XNode, base: ReturnType<typeof baseOf>, ctx: SlideCtx):
       return { paragraphs, text: paragraphs.map((p) => p.text).join('\n').trim(), gridSpan, rowSpan, merged };
     });
   });
-  if (anyMerged) flag(ctx, 'MERGED_TABLE_CELLS', 'info', 'A table has merged cells; the extracted grid keeps the merge spans.', base.id);
+  if (anyMerged) flag(ctx, 'MERGED_TABLE_CELLS', 'info', '표에 병합된 셀이 있습니다. 추출한 표는 병합 범위를 유지합니다.', base.id);
   ctx.counts.tables += 1;
   return {
     kind: 'table',
@@ -378,9 +378,9 @@ function parseGraphicFrame(gf: XNode, xf: Xform, groupPath: string[], ctx: Slide
     const el: ChartElement = { kind: 'chart', ...base, chart: data };
     ctx.counts.charts += 1;
     if (data) {
-      flag(ctx, 'CHART', 'info', 'Chart values were read from the chart cache. The chart picture itself is not reproduced; compare with the original slide.', c.id);
+      flag(ctx, 'CHART', 'info', '차트 값은 차트 캐시에서 읽었습니다. 차트 그림 자체는 재현하지 않으니 원본 슬라이드와 비교하세요.', c.id);
     } else {
-      flag(ctx, 'CHART_NO_DATA', 'attention', 'A chart was found but no data could be read from it. Its content is NOT in the extracted text.', c.id);
+      flag(ctx, 'CHART_NO_DATA', 'attention', '차트가 있지만 데이터를 읽지 못했습니다. 차트 내용은 추출한 텍스트에 없습니다.', c.id);
     }
     return el;
   }
@@ -401,15 +401,15 @@ function parseGraphicFrame(gf: XNode, xf: Xform, groupPath: string[], ctx: Slide
     el.previewRenderable = blip.renderable;
     ctx.counts.ole += 1;
     if (progId && /^Equation|^MathType/i.test(progId)) {
-      flag(ctx, 'EQUATION_OBJECT', 'attention', 'An old-style equation object (Equation Editor/MathType) was found. Only its picture is available, not the formula text. Check the original slide.', c.id);
+      flag(ctx, 'EQUATION_OBJECT', 'attention', '구형 수식 개체(Equation Editor/MathType)가 있습니다. 수식 텍스트는 없고 그림만 있으니 원본 슬라이드를 확인하세요.', c.id);
     } else {
-      flag(ctx, 'OLE_OBJECT', 'attention', `An embedded object${progId ? ` (${progId})` : ''} was found. Its contents are not extracted; only a preview picture may be available.`, c.id);
+      flag(ctx, 'OLE_OBJECT', 'attention', `포함 개체${progId ? `(${progId})` : ''}가 있습니다. 내용은 추출하지 않으며 미리보기 그림만 있을 수 있습니다.`, c.id);
     }
     return el;
   }
 
-  const el: UnsupportedElement = { kind: 'unsupported', ...base, what: `Graphic frame (${uri.slice(uri.lastIndexOf('/') + 1) || 'unknown type'})` };
-  flag(ctx, 'UNSUPPORTED_OBJECT', 'attention', `An object of type "${uri || 'unknown'}" is not supported and was not extracted.`, c.id);
+  const el: UnsupportedElement = { kind: 'unsupported', ...base, what: `그래픽 프레임(${uri.slice(uri.lastIndexOf('/') + 1) || '알 수 없는 유형'})` };
+  flag(ctx, 'UNSUPPORTED_OBJECT', 'attention', `"${uri || '알 수 없음'}" 유형의 개체는 지원하지 않아 추출하지 않았습니다.`, c.id);
   return el;
 }
 
@@ -438,8 +438,8 @@ function parseSmartArt(gd: XNode | undefined, base: ReturnType<typeof baseOf>, c
     'SMARTART',
     'warning',
     outline.length > 0
-      ? 'SmartArt diagram: its text was read from the data model and the hierarchy is inferred. The exact arrangement is not guaranteed; compare with the original slide.'
-      : 'SmartArt diagram: no text could be read from it. Its content is NOT in the extracted text.',
+      ? 'SmartArt 도식: 텍스트는 데이터 모델에서 읽었고 위계는 추정했습니다. 정확한 배치는 보장할 수 없으니 원본 슬라이드와 비교하세요.'
+      : 'SmartArt 도식에서 텍스트를 읽지 못했습니다. 내용은 추출한 텍스트에 없습니다.',
     c.id,
   );
   return { kind: 'smartart', ...base, outline, shapes };
@@ -469,7 +469,7 @@ function walk(nodes: XNode[], xf: Xform, groupPath: string[], depth: number, ctx
       case 'p:grpSp': {
         const c = commonProps(path(n, 'p:nvGrpSpPr', 'p:cNvPr'), ctx);
         if (depth >= ctx.limits.maxGroupDepth) {
-          flag(ctx, 'NESTING_LIMIT', 'warning', 'Shape groups are nested too deeply; some inner shapes were not read.', c.id);
+          flag(ctx, 'NESTING_LIMIT', 'warning', '도형 그룹이 너무 깊게 중첩되어 안쪽 도형 일부를 읽지 못했습니다.', c.id);
           break;
         }
         walk(n.children, groupXf(xf, child(n, 'p:grpSpPr')), [...groupPath, c.name], depth + 1, ctx, opts, out);
@@ -477,8 +477,8 @@ function walk(nodes: XNode[], xf: Xform, groupPath: string[], depth: number, ctx
       }
       case 'p:contentPart': {
         const c = commonProps(undefined, ctx);
-        const el: UnsupportedElement = { kind: 'unsupported', ...baseOf({ ...c, name: 'Ink / content part' }, ctx, opts, groupPath, undefined), what: 'Ink or content part' };
-        flag(ctx, 'INK', 'warning', 'Handwritten ink or an embedded content part was found. It is not extracted.', c.id);
+        const el: UnsupportedElement = { kind: 'unsupported', ...baseOf({ ...c, name: 'Ink / content part' }, ctx, opts, groupPath, undefined), what: '잉크 또는 콘텐츠 파트' };
+        flag(ctx, 'INK', 'warning', '손글씨 잉크나 포함된 콘텐츠 파트가 있습니다. 추출하지 않습니다.', c.id);
         out.push(el);
         break;
       }

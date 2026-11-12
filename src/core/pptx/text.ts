@@ -137,7 +137,7 @@ function runFromRPr(text: string, rPr: XNode | undefined, base: LevelStyle, ctx:
         severity: 'warning',
         slide: ctx.sink.slide,
         elementId: ctx.elementId,
-        message: 'Some characters use a symbol font (e.g. Symbol/Wingdings) and could not be decoded reliably. Check the original slide for the intended symbol.',
+        message: '일부 문자가 기호 글꼴(예: Symbol/Wingdings)을 써서 정확히 해석하지 못했을 수 있습니다. 원본 슬라이드에서 의도한 기호를 확인하세요.',
       });
     }
   }
@@ -197,7 +197,7 @@ function collectInlines(children: XNode[], base: LevelStyle, ctx: TextCtx, out: 
             severity: 'warning',
             slide: ctx.sink.slide,
             elementId: ctx.elementId,
-            message: 'An equation contains constructs that were only partially converted. Compare with the original slide.',
+            message: '수식 일부를 변환하지 못했습니다. 원본 슬라이드와 비교하세요.',
           });
         }
         out.push(m);

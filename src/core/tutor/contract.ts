@@ -2,26 +2,26 @@ import { z } from 'zod';
 import { QUESTION_TYPES, TUTOR_MODES } from '../study/types';
 
 /**
- * The only requests the AI endpoints accept. The browser sends structured data; the SERVER turns it into the prompt
- * (prompts.ts), picks the model and the output cap, and applies the budget guard. The browser can never supply a system
- * prompt, a model, a tool or an output length.
+ * The only requests the AI endpoint accepts. The browser sends structured data; the SERVER turns it into the prompt
+ * (prompts.ts) and picks the model from the connected ChatGPT account. The browser can never supply a system prompt, a
+ * model, a tool or an output length.
  */
 
 export { TUTOR_MODES };
 export type TutorMode = (typeof TUTOR_MODES)[number];
 
 export const TUTOR_MODE_LABEL: Record<TutorMode, string> = {
-  explain: 'Explain simply',
-  steps: 'Step by step',
-  exam: 'How to answer in an exam',
-  socratic: 'Guide me with questions',
-  quiz: 'Quiz me',
-  summary: 'Summarise',
-  compare: 'Compare and contrast',
-  mistakes: 'Common mistakes',
+  explain: '쉽게 설명',
+  steps: '단계별 설명',
+  exam: '시험 답안 쓰는 법',
+  socratic: '질문으로 이끌기',
+  quiz: '퀴즈 내기',
+  summary: '요약',
+  compare: '비교와 대조',
+  mistakes: '자주 하는 실수',
 };
 
-/** Hard limits (characters). They keep one request well inside the guard's input limit and the free tokens-per-minute quota. */
+/** Hard limits (characters). They keep one request small enough for one ChatGPT answer. */
 export const LIMITS = {
   question: 4_000,
   excerptText: 8_000,
@@ -70,10 +70,10 @@ export const TutorRequestSchema = z
   .strict()
   .superRefine((v, ctx) => {
     const total = v.excerpts.reduce((n, e) => n + e.text.length, 0);
-    if (total > LIMITS.excerptsTotal) ctx.addIssue({ code: 'custom', message: 'The selected slides contain too much text for one question.' });
-    if (v.history.reduce((n, h) => n + h.text.length, 0) > LIMITS.historyTotal) ctx.addIssue({ code: 'custom', message: 'The conversation is too long; start a new chat.' });
+    if (total > LIMITS.excerptsTotal) ctx.addIssue({ code: 'custom', message: '고른 슬라이드의 글이 너무 많아 한 번에 질문할 수 없습니다.' });
+    if (v.history.reduce((n, h) => n + h.text.length, 0) > LIMITS.historyTotal) ctx.addIssue({ code: 'custom', message: '대화가 너무 깁니다. 새 대화를 시작하세요.' });
     const refs = new Set(v.excerpts.map((e) => e.ref));
-    if (refs.size !== v.excerpts.length) ctx.addIssue({ code: 'custom', message: 'Duplicate slide labels.' });
+    if (refs.size !== v.excerpts.length) ctx.addIssue({ code: 'custom', message: '슬라이드 표시가 겹칩니다.' });
   });
 export type TutorRequest = z.infer<typeof TutorRequestSchema>;
 
@@ -104,7 +104,7 @@ export const GenerateRequestSchema = z
   })
   .strict()
   .superRefine((v, ctx) => {
-    if (v.blueprint && !v.wants.questions) ctx.addIssue({ code: 'custom', message: 'A question plan needs questions to be wanted.' });
+    if (v.blueprint && !v.wants.questions) ctx.addIssue({ code: 'custom', message: '문제 계획을 보내려면 문제 만들기를 선택해야 합니다.' });
   });
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 
@@ -117,7 +117,7 @@ export const GradeRequestSchema = z
         prompt: short(10_000),
         marks: z.number().min(0.5).max(1_000),
         modelAnswer: short(10_000).optional(),
-        rubric: z.array(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/, 'A marking point id may only use letters, digits, - and _.'), text: short(2_000), marks: z.number().min(0).max(1_000) }).strict()).min(1).max(30),
+        rubric: z.array(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/, '채점 기준 ID에는 영문자, 숫자, -, _만 쓸 수 있습니다.'), text: short(2_000), marks: z.number().min(0).max(1_000) }).strict()).min(1).max(30),
       })
       .strict(),
     answer: z.string().max(LIMITS.answer),
@@ -153,32 +153,65 @@ export type AuditRequest = z.infer<typeof AuditRequestSchema>;
 export const AiTaskSchema = z.discriminatedUnion('task', [TutorRequestSchema, GenerateRequestSchema, GradeRequestSchema, AuditRequestSchema]);
 export type AiTask = z.infer<typeof AiTaskSchema>;
 
-/** What every AI endpoint answers with (also used for refusals). */
-export type AiReply =
-  | { ok: true; text: string; costIsEstimate: boolean; shadowCostUsd: number; remainingDayUsd: number; remainingMonthUsd: number; /** The model hit its output cap: the text is cut off. */ truncated?: boolean }
-  | { ok: false; code: string; message: string; reasons?: string[] };
+/**
+ * Consent to send text to OpenAI through the user's ChatGPT plan, kept on this device only (backups never carry it). An
+ * object so that backup.ts can list every device-only key. The stored key name is unchanged, so earlier consent survives.
+ */
+export const AI_CONSENT_KEY = { chatgpt: 'aiConsentAt:chatgpt' } as const;
 
-/** Owner-facing status shown in Settings. Billing facts are attestations, never verification. */
-export const ATTEST_NAMES = ['projectHasNoBilling', 'modelsFreeOfCharge', 'acceptsFreeTierDataUse', 'observedFreeLimits', 'firstRequestApproved'] as const;
-export type AttestName = (typeof ATTEST_NAMES)[number];
+/** The output cap every prompt is built with (prompts.ts). The Responses route takes no output limit, so it shapes the prompt only. */
+export const AI_OUTPUT_CAP = 4_000;
 
-export interface OwnerStatus {
-  /** off · ready · low · paused · unknown (see AiStatus) */
-  state: 'off' | 'ready' | 'low' | 'paused' | 'unknown';
+/** What the AI endpoint answers with. A refusal or failure carries one fixed Korean sentence. */
+export type AiReply = { ok: true; text: string; model: string } | { ok: false; code: string; message: string };
+
+/** A model the signed-in ChatGPT account may use. `slug` goes upstream, `displayName` goes on screen. */
+export interface ChatGptModel {
+  slug: string;
+  displayName: string;
+}
+
+/** The fixed outcomes of one ChatGPT sign-in attempt. The callback page and Settings show one fixed sentence for each. */
+export const SIGN_IN_OUTCOMES = [
+  'connected',
+  'denied',
+  'expired',
+  'unknown-attempt',
+  'registration-incomplete',
+  'client-mismatch',
+  'code-rejected',
+  'client-invalid',
+  'id-token-invalid',
+  'account-mismatch',
+  'plan-not-enabled',
+  'superseded',
+  'upstream-unavailable',
+] as const;
+export type SignInOutcome = (typeof SIGN_IN_OUTCOMES)[number];
+
+/** The latest thing worth telling the user about the ChatGPT connection. */
+export type ChatGptNotice =
+  | { kind: 'sign-in'; outcome: SignInOutcome; at: number }
+  | { kind: 'session-ended'; reason: 'refresh-rejected' | 'invalid-client' | 'unreadable'; at: number }
+  | { kind: 'disconnected'; remoteRevoked: boolean | null; at: number };
+
+export type ChatGptPauseCode = 'usage-limit' | 'not-eligible';
+
+export type ChatGptConnection =
+  | { kind: 'disconnected'; /** A saved registration exists, so the next sign-in reuses its client. */ registered: boolean; email: string | null }
+  /** Signed in without the plan scope: the account is known, but ChatGPT plan usage is disabled until consent is given. */
+  | { kind: 'plan-disabled'; email: string | null }
+  | { kind: 'connected'; email: string | null; model: ChatGptModel | null; pause: { code: ChatGptPauseCode; since: number } | null };
+
+/** GET /api/status. `state` and `reasons` are the one gate every AI screen reads. */
+export interface AiStatus {
+  state: 'off' | 'ready' | 'paused';
+  /** Korean sentences saying why AI cannot answer right now. Empty while ready. */
   reasons: string[];
-  enabled: boolean;
-  keyPresent: boolean;
-  model: string;
-  models: string[];
-  budgets: { dailyUsd: number; monthlyUsd: number };
-  limits: { maxInputTokens: number; maxOutputTokens: number; maxRequestsPerDay: number; maxRequestsPerMonth: number; maxConcurrent: number; requestTimeoutMs: number; maxUnresolved: number };
-  attestations: Partial<Record<AttestName, { confirmedAt: string }>>;
-  observedFreeLimits?: { requestsPerDay: number; requestsPerMinute: number; tokensPerMinute: number };
-  spentDayUsd?: number;
-  spentMonthUsd?: number;
-  remainingDayUsd?: number;
-  remainingMonthUsd?: number;
-  requestsToday?: number;
-  unresolved?: { id: string; amountUsd: number; reason: string }[];
-  billing: 'owner-attestation-required' | 'owner-attested-not-verified';
+  /** True when this server runs under the local launcher with its seal key, so a sign-in can start here. */
+  signInAvailable: boolean;
+  connection: ChatGptConnection;
+  /** Set while a started sign-in can still come back. */
+  pendingUntil: number | null;
+  notice: ChatGptNotice | null;
 }

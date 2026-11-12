@@ -27,9 +27,9 @@ export function PictureTextEditor({ saved, onSave }: { saved: string; onSave: (t
     // The block around this is clickable (it highlights the shape); typing here must not toggle it.
     <div className="mt-3 w-full" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <Field
-        label="Words in this picture"
+        label="이 그림 속 글자"
         htmlFor={id}
-        hint="Type or paste what the picture says: labels, values, steps. It is added to this slide’s study text, so search, the tutor, flashcards and exams can use it. It is always marked as typed by you."
+        hint="그림에 적힌 내용(라벨, 값, 단계)을 입력하거나 붙여 넣으세요. 이 슬라이드의 학습 텍스트에 더해져 검색, 튜터, 플래시카드, 시험에서 쓸 수 있으며, 항상 내가 입력한 것으로 표시됩니다."
       >
         <TextArea
           id={id}
@@ -46,15 +46,15 @@ export function PictureTextEditor({ saved, onSave }: { saved: string; onSave: (t
       </Field>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button variant="primary" size="sm" disabled={!dirty || state === 'saving'} onClick={() => void save(text)}>
-          Save text
+          텍스트 저장
         </Button>
         {saved && (
           <Button variant="ghost" size="sm" disabled={state === 'saving'} onClick={() => void save('')}>
-            Remove
+            지우기
           </Button>
         )}
         <span role="status" className="text-[13px] text-ink-2">
-          {state === 'saved' ? (saved ? 'Saved.' : 'Removed.') : state === 'error' ? 'Could not save. Try again.' : ''}
+          {state === 'saved' ? (saved ? '저장했습니다.' : '지웠습니다.') : state === 'error' ? '저장하지 못했습니다. 다시 시도하세요.' : ''}
         </span>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { courseSchema, lectureSchema, settingSchema, slideRowSchema } from '../d
 import { STUDY_TABLE_SCHEMAS, STUDY_TABLES, type StudyTable } from '../study/types';
 import { withLimits } from '../pptx/limits';
 import { ZipArchive } from '../pptx/zip';
+import { AI_CONSENT_KEY } from '../tutor/contract';
 
 /**
  * Whole-library backup as a single ZIP:
@@ -25,7 +26,8 @@ export const BACKUP_FORMAT = 'studyai-backup';
  * Settings that belong to one device and are never exported or restored: the consent to send text to an AI service must be
  * given again on every device, so a restored (or doctored) backup can never pre-approve anything.
  */
-const DEVICE_ONLY_SETTINGS: ReadonlySet<string> = new Set(['aiConsentAt']);
+// 'aiConsentAt' was the consent of the retired Gemini engine; libraries made before it was removed can still hold it.
+const DEVICE_ONLY_SETTINGS: ReadonlySet<string> = new Set([...Object.values(AI_CONSENT_KEY), 'aiConsentAt']);
 
 /** v1: courses/lectures/slides/media/files/settings. v2 adds the learning-engine tables (notes, cards, …). */
 export const BACKUP_VERSION = 3;
@@ -146,7 +148,7 @@ export async function exportBackup(db: StudyDB, onProgress?: (p: ExportProgress)
     const rows = await db.table(t).toArray();
     if (rows.length > 0) addJson(`data/${t}.json`, rows);
   }
-  onProgress?.({ done: 1, total, label: 'Library index' });
+  onProgress?.({ done: 1, total, label: '라이브러리 목록' });
 
   let n = 1;
   for (const l of lectures) {
@@ -165,7 +167,7 @@ export async function exportBackup(db: StudyDB, onProgress?: (p: ExportProgress)
 
   zip.end();
   if (failure) throw failure;
-  if (!finished) throw new BackupError('Backup could not be finalised.');
+  if (!finished) throw new BackupError('백업을 마무리하지 못했습니다.');
   return sink.finish();
 }
 
@@ -188,12 +190,12 @@ export interface ParsedBackup {
 }
 
 function readJson(zip: ZipArchive, name: string): unknown {
-  if (!zip.has(name)) throw new BackupError(`The backup is missing "${name}".`);
+  if (!zip.has(name)) throw new BackupError(`백업에 "${name}"이(가) 없습니다.`);
   try {
     return JSON.parse(new TextDecoder().decode(zip.read(name)));
   } catch (err) {
     if (err instanceof BackupError) throw err;
-    throw new BackupError(`"${name}" in the backup is damaged (${err instanceof Error ? err.message : 'unreadable'}).`);
+    throw new BackupError(`백업의 "${name}"이(가) 손상되었습니다(${err instanceof Error ? err.message : '읽을 수 없음'}).`);
   }
 }
 
@@ -201,7 +203,7 @@ function validate<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
   const r = schema.safeParse(value);
   if (!r.success) {
     const issue = r.error.issues[0];
-    throw new BackupError(`The backup contains invalid ${what}${issue ? ` (${issue.path.join('.') || 'root'}: ${issue.message})` : ''}.`);
+    throw new BackupError(`백업의 ${what} 항목이 올바르지 않습니다${issue ? `(${issue.path.join('.') || 'root'}: ${issue.message})` : ''}.`);
   }
   return r.data;
 }
@@ -212,20 +214,20 @@ export function readBackup(bytes: Uint8Array): ParsedBackup {
   try {
     zip = new ZipArchive(bytes, BACKUP_LIMITS);
   } catch (err) {
-    throw new BackupError(`This is not a readable StudyAI backup (${err instanceof Error ? err.message : 'unknown error'}).`);
+    throw new BackupError(`읽을 수 있는 StudyAI 백업이 아닙니다(${err instanceof Error ? err.message : '알 수 없는 오류'}).`);
   }
-  const manifest = validate(manifestSchema, readJson(zip, 'manifest.json'), 'manifest');
+  const manifest = validate(manifestSchema, readJson(zip, 'manifest.json'), '매니페스트');
   if (manifest.version > BACKUP_VERSION) {
-    throw new BackupError(`This backup was made by a newer version of StudyAI (format ${manifest.version}); update the app first.`);
+    throw new BackupError(`더 새로운 버전의 StudyAI로 만든 백업입니다(형식 ${manifest.version}). 먼저 앱을 업데이트하세요.`);
   }
-  const courses = validate(z.array(courseSchema).max(10_000), readJson(zip, 'data/courses.json'), 'courses') as CourseRow[];
-  const lectures = validate(z.array(lectureSchema).max(100_000), readJson(zip, 'data/lectures.json'), 'lectures') as LectureRow[];
-  const settings = (validate(z.array(settingSchema).max(10_000), readJson(zip, 'data/settings.json'), 'settings') as SettingRow[]).filter((s) => !DEVICE_ONLY_SETTINGS.has(s.key));
+  const courses = validate(z.array(courseSchema).max(10_000), readJson(zip, 'data/courses.json'), '과목') as CourseRow[];
+  const lectures = validate(z.array(lectureSchema).max(100_000), readJson(zip, 'data/lectures.json'), '강의') as LectureRow[];
+  const settings = (validate(z.array(settingSchema).max(10_000), readJson(zip, 'data/settings.json'), '설정') as SettingRow[]).filter((s) => !DEVICE_ONLY_SETTINGS.has(s.key));
 
   const courseIds = new Set(courses.map((c) => c.id));
-  if (courseIds.size !== courses.length) throw new BackupError('The backup contains duplicate course ids.');
+  if (courseIds.size !== courses.length) throw new BackupError('백업에 중복된 과목 ID가 있습니다.');
   const lectureIds = new Set(lectures.map((l) => l.id));
-  if (lectureIds.size !== lectures.length) throw new BackupError('The backup contains duplicate lecture ids.');
+  if (lectureIds.size !== lectures.length) throw new BackupError('백업에 중복된 강의 ID가 있습니다.');
 
   const study: ParsedBackup['study'] = {};
   for (const t of STUDY_TABLES) {
@@ -234,7 +236,7 @@ export function readBackup(bytes: Uint8Array): ParsedBackup {
     const rows = validate(z.array(STUDY_TABLE_SCHEMAS[t]).max(500_000), readJson(zip, name), t) as Record<string, unknown>[];
     for (const r of rows) {
       const cid = r['courseId'];
-      if (typeof cid === 'string' && !courseIds.has(cid)) throw new BackupError(`The backup's ${t} refer to a course that is not in the backup.`);
+      if (typeof cid === 'string' && !courseIds.has(cid)) throw new BackupError(`백업의 ${t} 항목이 백업에 없는 과목을 가리킵니다.`);
     }
     study[t] = rows;
   }
@@ -244,19 +246,19 @@ export function readBackup(bytes: Uint8Array): ParsedBackup {
   const mediaIndex = new Map<string, z.infer<typeof mediaIndexSchema>>();
   const filesPresent = new Set<string>();
   for (const l of lectures) {
-    if (!courseIds.has(l.courseId)) throw new BackupError(`Lecture "${l.title}" refers to a course that is not in the backup.`);
-    const slides = validate(z.array(slideRowSchema).max(5_000), readJson(zip, `data/slides/${l.id}.json`), `slides of "${l.title}"`) as SlideRow[];
-    if (slides.some((s) => s.lectureId !== l.id)) throw new BackupError(`Slides of "${l.title}" belong to a different lecture.`);
-    if (new Set(slides.map((s) => s.index)).size !== slides.length) throw new BackupError(`Slides of "${l.title}" contain duplicate positions.`);
-    if (slides.length !== l.slideCount) warnings.push(`"${l.title}" lists ${l.slideCount} slides but the backup holds ${slides.length}.`);
+    if (!courseIds.has(l.courseId)) throw new BackupError(`강의 "${l.title}"이(가) 백업에 없는 과목을 가리킵니다.`);
+    const slides = validate(z.array(slideRowSchema).max(5_000), readJson(zip, `data/slides/${l.id}.json`), `"${l.title}"의 슬라이드`) as SlideRow[];
+    if (slides.some((s) => s.lectureId !== l.id)) throw new BackupError(`"${l.title}"의 슬라이드가 다른 강의에 속해 있습니다.`);
+    if (new Set(slides.map((s) => s.index)).size !== slides.length) throw new BackupError(`"${l.title}"의 슬라이드 순서가 중복됩니다.`);
+    if (slides.length !== l.slideCount) warnings.push(`"${l.title}"은(는) 슬라이드가 ${l.slideCount}장이라고 되어 있지만 백업에는 ${slides.length}장이 있습니다.`);
     slidesByLecture.set(l.id, slides);
-    const index = validate(mediaIndexSchema, readJson(zip, `data/media/${l.id}.json`), `media index of "${l.title}"`);
+    const index = validate(mediaIndexSchema, readJson(zip, `data/media/${l.id}.json`), `"${l.title}"의 미디어 목록`);
     for (const m of index) {
-      if (!m.entry.startsWith(`media/${l.id}/`) || !zip.has(m.entry)) throw new BackupError(`An image of "${l.title}" is missing from the backup.`);
+      if (!m.entry.startsWith(`media/${l.id}/`) || !zip.has(m.entry)) throw new BackupError(`"${l.title}"의 이미지가 백업에 없습니다.`);
     }
     mediaIndex.set(l.id, index);
     if (zip.has(`files/${l.id}.pptx`)) filesPresent.add(l.id);
-    else warnings.push(`The original PowerPoint file of "${l.title}" is not in the backup (re-import will not be possible).`);
+    else warnings.push(`"${l.title}"의 원본 파일이 백업에 없습니다(다시 가져오기를 할 수 없습니다).`);
   }
   return { manifest, courses, lectures, settings, study, slidesByLecture, mediaIndex, filesPresent, zip, warnings };
 }

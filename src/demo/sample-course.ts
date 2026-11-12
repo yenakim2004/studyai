@@ -43,7 +43,7 @@ export async function loadSampleCourse(db: StudyDB): Promise<LoadedSample> {
       });
     }
     const plan = planPack(SAMPLE_PACK, course.id, contexts);
-    if (plan.fatal || plan.stats.rejected > 0 || plan.stats.unverified > 0) throw new Error(plan.fatal ?? 'The sample study material did not pass its own checks.');
+    if (plan.fatal || plan.stats.rejected > 0 || plan.stats.unverified > 0) throw new Error(plan.fatal ?? '예시 학습 자료가 자체 검사를 통과하지 못했습니다.');
     await applyPackPlan(db, course.id, { ...plan, cards: plan.cards.map((c) => ({ ...c, status: 'approved' })), questions: plan.questions.map((q) => ({ ...q, status: 'approved' })) });
     await db.settings.put({ key: SAMPLE_COURSE_SETTING, value: course.id });
     return { courseId: course.id, created: true };

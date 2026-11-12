@@ -43,7 +43,7 @@ export function slideContextText(slide: SlideData, slideHeight: number): string 
   return slideToMarkdown(slide, slideHeight).replace(/^### Slide \d+: [^\n]*\n+/, '').trim();
 }
 
-const CUT = '\n[…shortened]';
+const CUT = '\n[…줄임]';
 
 export function buildContext(slides: readonly ContextSlide[]): BuiltContext {
   const excerpts: Excerpt[] = [];
@@ -58,7 +58,7 @@ export function buildContext(slides: readonly ContextSlide[]): BuiltContext {
       dropped += 1;
       continue;
     }
-    let text = s.text.trim() || '(this slide has no readable text)';
+    let text = s.text.trim() || '(이 슬라이드에는 읽을 수 있는 텍스트가 없습니다)';
     if (text.length > LIMITS.excerptText) {
       text = text.slice(0, LIMITS.excerptText - CUT.length) + CUT;
       shortened += 1;

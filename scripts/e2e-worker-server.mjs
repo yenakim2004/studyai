@@ -1,56 +1,49 @@
 #!/usr/bin/env node
 /**
- * Starts the REAL Worker and Durable Object locally (wrangler dev, workerd, no Cloudflare account, no network) with the
- * scripted fake Gemini, for the end-to-end tests. Test-only secrets are generated fresh on every run and never written
- * to the repository; the generated owner key goes to .scratch/ (git-ignored) so the tests can sign in.
+ * Starts the REAL Worker and Durable Object locally (wrangler dev, workerd, no Cloudflare account, no network) for the
+ * end-to-end tests. Two modes, chosen by playwright.config.ts:
+ *
+ *   node scripts/e2e-worker-server.mjs        the local launcher's setup: loopback address, a fresh test seal key, and the
+ *                                             fake OpenAI issuer with a scripted model (tests/helpers/*.mjs)
+ *   node scripts/e2e-worker-server.mjs gate   a hosted copy: the production entry and config with no variables at all, which
+ *                                             must serve the study app and refuse every AI route
+ *
+ * The seal key is generated per run and lives only in this process's arguments to wrangler; state goes to .scratch/ (git-ignored).
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createFakeOpenAi, serveFakeOpenAi } from '../tests/helpers/fake-openai.mjs';
+import { scriptedModel } from '../tests/helpers/scripted-model.mjs';
 
 // The ports come from playwright.config.ts (tests/e2e/ports.ts); the defaults are the same numbers.
 const P = { preview: process.env.E2E_PORT_PREVIEW ?? '4391', worker: process.env.E2E_PORT_WORKER ?? '8792', gate: process.env.E2E_PORT_GATE ?? '8793', stub: process.env.E2E_PORT_STUB ?? '8795' };
 const PREVIEW = `http://127.0.0.1:${P.preview}/`;
 
-// "node scripts/e2e-worker-server.mjs gate" runs the variant with the whole site behind the owner login.
-const gate = process.argv[2] === 'gate';
-const CONFIG = gate ? 'wrangler.gate.jsonc' : 'wrangler.test.jsonc';
-const PORT = gate ? P.gate : P.worker;
-const STATE = gate ? '.scratch/e2e-gate-state' : '.scratch/e2e-state';
-const KEY_FILE = gate ? '.scratch/e2e-gate-owner-key.txt' : '.scratch/e2e-owner-key.txt';
+const hosted = process.argv[2] === 'gate';
+const PORT = hosted ? P.gate : P.worker;
+const STATE = hosted ? '.scratch/e2e-hosted-state' : '.scratch/e2e-state';
 
-// A local stand-in for Google's generateContent endpoint, so the REAL Gemini adapter (not the scripted fake) can be exercised inside
-// workerd with real fetch options and real HTTP. It records what it receives (GET /__log) and never sees a real key or the internet.
-const STUB_PORT = Number(P.stub);
-const stubLog = [];
-if (!gate) {
-  createServer((req, res) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => {
-      const body = Buffer.concat(chunks).toString('utf8');
-      const json = (status, value, headers = {}) => {
-        res.writeHead(status, { 'content-type': 'application/json', ...headers });
-        res.end(JSON.stringify(value));
-      };
-      if (req.url === '/__log') return json(200, stubLog);
-      if (req.url === '/__clear') {
-        stubLog.length = 0;
-        return json(200, { ok: true });
-      }
-      stubLog.push({ method: req.method, url: req.url, key: req.headers['x-goog-api-key'] ?? null, contentType: req.headers['content-type'] ?? null, body });
-      if (req.url === '/elsewhere') return json(200, { followed: true });
-      if (!/^\/v1beta\/models\/[a-z0-9.-]+:generateContent$/.test(req.url ?? '') || req.method !== 'POST') return json(404, { error: { code: 404, message: 'not found', status: 'NOT_FOUND' } });
-      if (!req.headers['x-goog-api-key']) return json(401, { error: { code: 401, message: 'missing key', status: 'UNAUTHENTICATED' } });
-      if (body.includes('STUB-REDIRECT')) return json(302, {}, { location: `http://127.0.0.1:${STUB_PORT}/elsewhere` });
-      return json(200, {
-        responseId: 'stub-1',
-        candidates: [{ content: { role: 'model', parts: [{ text: 'A tape is the unbounded memory a Turing machine reads and writes [S1].\n\nBASIS: lecture\nFOLLOWUPS: What is the head? | How does it move? | Why infinite?' }] }, finishReason: 'STOP' }],
-        usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 25, totalTokenCount: 145 },
+if (!hosted) {
+  // OpenAI's stand-in. The Worker reaches it on 127.0.0.1, the browser on localhost, which is a different site from the app,
+  // as auth.openai.com is in real use.
+  const fakeOpenAi = createFakeOpenAi();
+  fakeOpenAi.behaviour.script = scriptedModel;
+  const handler = (req, res) => {
+    if ((req.url ?? '').startsWith('/oai-') || req.url === '/__oai/log') {
+      void serveFakeOpenAi(fakeOpenAi, req, res).catch(() => {
+        res.writeHead(500);
+        res.end();
       });
-    });
-  }).listen(STUB_PORT, '127.0.0.1');
+      return;
+    }
+    res.writeHead(req.url === '/favicon.ico' ? 204 : 404);
+    res.end();
+  };
+  createServer(handler).listen(Number(P.stub), '127.0.0.1');
+  // Browsers may resolve localhost to ::1 first. Where IPv6 loopback is missing, 127.0.0.1 alone still answers.
+  createServer(handler).on('error', () => {}).listen(Number(P.stub), '::1');
 }
 
 async function waitFor(url, ms) {
@@ -71,19 +64,16 @@ await waitFor(PREVIEW, 300_000);
 
 rmSync(STATE, { recursive: true, force: true });
 mkdirSync('.scratch', { recursive: true });
-const ownerKey = `sak_${randomBytes(32).toString('base64url')}`;
-writeFileSync(KEY_FILE, ownerKey);
-const hash = createHash('sha256').update(ownerKey).digest('hex');
-const secret = randomBytes(48).toString('base64url');
+// An explicit, empty env file, so a developer's own .dev.vars or .env can never change what these servers are.
+writeFileSync('.scratch/e2e-empty.env', '');
 
-const child = spawn(
-  process.execPath,
-  [
-    'node_modules/wrangler/bin/wrangler.js', 'dev', '-c', CONFIG, '--port', PORT, '--ip', '127.0.0.1', '--local', '--persist-to', STATE,
-    '--var', `ALLOWED_HOSTS:127.0.0.1:${PORT}`, '--var', `OWNER_KEY_HASH:${hash}`, '--var', `SESSION_SECRET:${secret}`, '--var', `GEMINI_API_KEY:${randomBytes(24).toString('hex')}`, ...(gate ? [] : ['--var', `GEMINI_STUB_URL:http://127.0.0.1:${STUB_PORT}`]), // random, unused: the scripted fake never calls Google
-  ],
-  { stdio: 'inherit', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' } },
-);
+const vars = hosted
+  ? []
+  : ['--var', `STUDYAI_LOOPBACK:127.0.0.1:${PORT}`, '--var', `CHATGPT_SEAL_KEY:${randomBytes(32).toString('base64url')}`, '--var', `OPENAI_STUB_URL:http://127.0.0.1:${P.stub}`, '--var', `OPENAI_STUB_BROWSER_URL:http://localhost:${P.stub}`];
+const child = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'dev', '-c', hosted ? 'wrangler.jsonc' : 'wrangler.test.jsonc', '--port', PORT, '--ip', '127.0.0.1', '--local', '--persist-to', STATE, '--env-file', '.scratch/e2e-empty.env', ...vars], {
+  stdio: 'inherit',
+  env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' },
+});
 const stop = () => child.kill();
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);

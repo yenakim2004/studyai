@@ -1,9 +1,4 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/literata/index.css';
-@import '@fontsource-variable/literata/wght-italic.css';
-@import '@fontsource/ibm-plex-sans/400.css';
-@import '@fontsource/ibm-plex-sans/500.css';
-@import '@fontsource/ibm-plex-sans/600.css';
 @import '@fontsource/ibm-plex-mono/400.css';
 @import '@fontsource/ibm-plex-mono/500.css';
 @import 'katex/dist/katex.min.css';
@@ -113,9 +108,11 @@
   --color-ok-soft: var(--ok-soft);
   --color-warn-soft: var(--warn-soft);
   --color-bad-soft: var(--bad-soft);
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-serif: 'Literata Variable', Georgia, 'Times New Roman', serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Korean first: the system Hangul faces of macOS, Windows, Android and Linux, so no glyph falls back one at a time. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', 'Noto Sans CJK KR', 'Segoe UI', sans-serif;
+  /* Reading text uses the same faces: system Hangul serif faces read poorly on screen. */
+  --font-serif: var(--font-sans);
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, 'D2Coding', 'Malgun Gothic', monospace;
   --radius-control: 6px;
   --radius-panel: 8px;
 }
@@ -128,6 +125,9 @@ html {
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
+  /* Korean breaks between words, not inside them. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 body {
@@ -190,7 +190,8 @@ mark,
   background: var(--slide-bg);
   border-radius: 3px;
   box-shadow: 0 0 0 1px var(--rule-strong);
-  font-family: Calibri, Carlito, 'Segoe UI', 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: Calibri, Carlito, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
+  word-break: normal;
   user-select: text;
 }
 .slide-stage * {
@@ -198,6 +199,15 @@ mark,
 }
 .slide-el {
   position: absolute;
+}
+/* The words of a PDF page are drawn by the page picture; the text on top only makes them selectable and searchable. */
+.slide-text-layer,
+.slide-text-layer * {
+  color: transparent !important;
+}
+.slide-text-layer ::selection {
+  background: rgb(11 110 110 / 0.3);
+  color: transparent;
 }
 .slide-el[data-active='true'] {
   outline: 0.35cqw solid var(--accent);

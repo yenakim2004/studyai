@@ -10,10 +10,50 @@ import { slideGaps } from '../tutor/gaps';
 export { studyPackPrompt, type PromptOptions } from './pack-format';
 
 /**
- * Markdown export of lectures, designed to be pasted into an AI chat (Claude, Gemini, …) together
- * with `studyPackPrompt()`. Slides keep their numbers so the AI can cite them and the app can verify
- * every quote when the result is imported. Equations are kept as LaTeX.
+ * Markdown export of lectures, designed to be pasted into an AI chat together with `studyPackPrompt()`. Slides keep their
+ * numbers so the AI can cite them and the app can verify every quote when the result is imported. Equations are kept as LaTeX.
+ * The markers of the model-facing export stay English: prompts, the tutor context and test servers read them.
  */
+
+/** Words the slide Markdown is built from: one table for what the model reads, one for a note the student reads. */
+export interface SlideMarkdownLabels {
+  heading: (index: number, title: string) => string;
+  diagram: string;
+  picture: string;
+  autoDescription: string;
+  typedByStudent: string;
+  notAvailable: string;
+  failed: string;
+  empty: string;
+  speakerNotes: string;
+  caveats: string;
+}
+
+export const MODEL_LABELS: SlideMarkdownLabels = {
+  heading: (n, t) => `### Slide ${n}: ${t}`,
+  diagram: 'Diagram:',
+  picture: 'Picture',
+  autoDescription: ' (automatic description, may be wrong)',
+  typedByStudent: 'the words in the picture, typed by the student:',
+  notAvailable: 'contents not available as text',
+  failed: '[This slide could not be read.]',
+  empty: '(no extractable text)',
+  speakerNotes: '**Speaker notes:**',
+  caveats: '> Extraction caveats:',
+};
+
+export const STUDENT_LABELS: SlideMarkdownLabels = {
+  heading: (n, t) => `### 슬라이드 ${n}: ${t}`,
+  diagram: '도식:',
+  picture: '그림',
+  autoDescription: '(자동 설명, 틀릴 수 있음)',
+  typedByStudent: '내가 입력한 그림 속 글자:',
+  notAvailable: '텍스트로 읽을 수 없는 내용',
+  failed: '[이 슬라이드를 읽지 못했습니다.]',
+  empty: '(추출할 수 있는 텍스트 없음)',
+  speakerNotes: '**발표자 노트:**',
+  caveats: '> 추출 주의 사항:',
+};
 
 function inlineMd(i: Inline): string {
   if (i.kind === 'break') return '  \n';
@@ -47,7 +87,7 @@ function shapeMarkdown(paragraphs: Paragraph[]): string {
   return rows.map((p, i) => paragraphMd(p, markers[i]!)).filter(Boolean).join('\n');
 }
 
-export function slideToMarkdown(slide: SlideData, slideHeight: number): string {
+export function slideToMarkdown(slide: SlideData, slideHeight: number, L: SlideMarkdownLabels = MODEL_LABELS): string {
   const parts: string[] = [];
   for (const el of orderedContentElements(slide.elements, slideHeight)) {
     switch (el.kind) {
@@ -69,23 +109,23 @@ export function slideToMarkdown(slide: SlideData, slideHeight: number): string {
         if (el.chart) parts.push(chartToText(el.chart).split('\n').map((l) => `> ${l}`).join('\n'));
         break;
       case 'smartart':
-        if (el.outline.length) parts.push(`Diagram:\n${el.outline.map((n) => `${'  '.repeat(n.depth)}- ${n.text}`).join('\n')}`);
+        if (el.outline.length) parts.push(`${L.diagram}\n${el.outline.map((n) => `${'  '.repeat(n.depth)}- ${n.text}`).join('\n')}`);
         break;
       case 'picture': {
         const d = describePicture(el.alt);
         const typed = pictureTextOf(slide, el.id);
         // A small picture without a description is an icon or a bullet: nothing to tell the reader or the tutor.
         if (!d && !typed && el.coverage < 0.06) break;
-        const label = `Picture${d ? `${d.auto ? ' (automatic description, may be wrong)' : ''}: ${d.text}` : ''}`;
+        const label = `${L.picture}${d ? `${d.auto ? L.autoDescription : ''}: ${d.text}` : ''}`;
         // Text the student typed is shown as such, so nobody mistakes it for something the file itself contains.
-        parts.push(typed ? `[${label} — the words in the picture, typed by the student:]\n${typed.split('\n').map((l) => `> ${l}`).join('\n')}` : `[${label} — contents not available as text]`);
+        parts.push(typed ? `[${label} — ${L.typedByStudent}]\n${typed.split('\n').map((l) => `> ${l}`).join('\n')}` : `[${label} — ${L.notAvailable}]`);
         break;
       }
       default:
         break;
     }
   }
-  if (slide.status === 'failed') parts.push('[This slide could not be read.]');
+  if (slide.status === 'failed') parts.push(L.failed);
   const body = parts.join('\n\n');
   const notes = notesAddNothing(slide.notes, `${displayTitle(slide)}\n${body}`) ? '' : slide.notes.trim();
   // A flag the student settled (by typing a picture's words) is no longer a caveat: "content not available" would contradict the text right above it.
@@ -93,10 +133,10 @@ export function slideToMarkdown(slide: SlideData, slideHeight: number): string {
   // What the slide asks without answering, and labels whose positions carry the meaning: the reader must not fill these in as if the slide said them.
   for (const g of slideGaps(slide)) if (g.kind === 'question-unanswered' || g.kind === 'arrangement') caveats.push(g.message);
   return [
-    `### Slide ${slide.index}: ${displayTitle(slide)}`,
-    body || '(no extractable text)',
-    notes ? `**Speaker notes:** ${notes.replace(/\n/g, ' ')}` : '',
-    caveats.length ? `> Extraction caveats: ${caveats.join(' ')}` : '',
+    L.heading(slide.index, displayTitle(slide)),
+    body || L.empty,
+    notes ? `${L.speakerNotes} ${notes.replace(/\n/g, ' ')}` : '',
+    caveats.length ? `${L.caveats} ${caveats.join(' ')}` : '',
   ]
     .filter(Boolean)
     .join('\n\n');

@@ -13,7 +13,7 @@ export interface NoteContext {
 
 const MAX_NOTE_CHARS = 3_000;
 
-const words = (s: string): string[] => [...new Set(s.toLowerCase().normalize('NFKC').split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3))];
+const words = (s: string): string[] => [...new Set(s.toLowerCase().normalize('NFKC').split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= (/[가-힣]/.test(w) ? 2 : 3)))];
 
 export function pickNotes(notes: readonly NoteRow[], question: string, limit = 3): NoteContext[] {
   const terms = words(question);
@@ -32,7 +32,7 @@ export function pickNotes(notes: readonly NoteRow[], question: string, limit = 3
       if (title.includes(t)) score += 2;
       if (body.includes(t)) score += 1;
     }
-    if (score > 0) scored.push({ n: { noteId: note.id, title: note.title, text: text.length > MAX_NOTE_CHARS ? `${text.slice(0, MAX_NOTE_CHARS)}\n[…shortened]` : text }, score });
+    if (score > 0) scored.push({ n: { noteId: note.id, title: note.title, text: text.length > MAX_NOTE_CHARS ? `${text.slice(0, MAX_NOTE_CHARS)}\n[…줄임]` : text }, score });
   }
   return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((s) => s.n);
 }

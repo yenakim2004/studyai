@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ScriptedGemini } from '../worker/src/scripted-gemini';
+import { scriptedPack } from './helpers/scripted-pack';
 import { parsePptx } from '../src/core/pptx';
 import type { ParsedDeck, SlideData } from '../src/core/pptx/model';
 import { withPictureText } from '../src/core/pptx/picturetext';
@@ -124,8 +124,8 @@ describe('teaching a theory lecture', () => {
     expect(notesFor(7)).toEqual([TEACHING_NOTES.proof]); // a proof with exponents, no formula blocks
     expect(notesFor(11)).toContain(TEACHING_NOTES.proof);
     expect(notesFor(3)).toEqual([]);
-    expect(TEACHING_NOTES.machine).toMatch(/trace a computation one step at a time, naming the state, the symbol read and the move or next state/);
-    expect(TEACHING_NOTES.machine).toMatch(/Do not add states, transitions or behaviour that the slides do not show/);
+    expect(TEACHING_NOTES.machine).toMatch(/계산은 한 단계씩 상태, 읽은 기호, 이동이나 다음 상태를 밝히며 추적하세요/);
+    expect(TEACHING_NOTES.machine).toMatch(/슬라이드에 없는 상태, 전이, 동작을 더하지 마세요/);
   });
 
   it('asks for the run of a machine, not an invented program, when the question is about a machine', async () => {
@@ -137,8 +137,8 @@ describe('teaching a theory lecture', () => {
       amount: 'few',
       blueprint: [{ type: 'algorithm', difficulty: 3, marks: 6, points: 6, topic: 'Turing machines', slides: [8, 9] }],
     });
-    const sys = buildAiRequest(task, 'gemini-3.1-flash-lite', 4_000).request.system!;
-    expect(sys).toMatch(/For a machine or automaton on the slides: ask for its run on a given input \(or for a machine that does a stated job\), one marking point per transition or decision/);
+    const sys = buildAiRequest(task, 'test-model', 4_000).request.system!;
+    expect(sys).toMatch(/슬라이드에 나온 기계나 오토마타는 주어진 입력에 대한 실행\(또는 정해진 일을 하는 기계\)을 묻고, 전이나 결정마다 채점 기준 하나를 둡니다/);
   });
 });
 
@@ -175,9 +175,8 @@ describe('planning and checking exam questions for a theory lecture', () => {
   async function ask(group: readonly Slot[], slides: SlideData[], deck: ParsedDeck): Promise<PackPlan> {
     const planned: PlannedSlot[] = group.map(({ n: _n, ...rest }) => rest);
     const task = AiTaskSchema.parse({ task: 'generate', lectureMarkdown: markdownOf(deck, slides), wants: { notes: false, cards: false, questions: true }, amount: 'normal', blueprint: planned });
-    const { request } = buildAiRequest(task, 'gemini-3.1-flash-lite', 4_000);
-    const out = await new ScriptedGemini().complete({ model: request.model, maxOutputTokens: request.maxOutputTokens, messages: request.messages, ...(request.system ? { system: request.system } : {}) }, new AbortController().signal);
-    if (out.kind !== 'ok') throw new Error('the scripted model did not answer');
+    const { request } = buildAiRequest(task, 'test-model', 4_000);
+    const out = { text: scriptedPack(request) };
     const ctx: LectureContext = { id: 'lec', title: 'Computability and complexity', fileHash: deck.fileHash, revision: 1, slideCount: 15, slideText: (n) => (slides[n - 1] ? slideVerificationText(slides[n - 1]!) : undefined) };
     return planPack(JSON.parse(out.text), 'course', [ctx], {}, 0, { expected: planned });
   }

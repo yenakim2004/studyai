@@ -4,10 +4,10 @@
  *  - the build, which writes dist/_headers for Cloudflare static assets.
  */
 
-/** The app makes no cross-origin requests: everything is 'self'. AI calls (Phase 3) will add one explicit connect-src origin. */
+/** PDF image decoders need WebAssembly; JavaScript eval and cross-origin resources remain blocked. */
 export const CSP = [
   "default-src 'none'",
-  "script-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self'",
   // React/KaTeX set inline style *attributes*; scripts and stylesheets stay locked down.
   "style-src-attr 'unsafe-inline'",

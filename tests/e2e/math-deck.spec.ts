@@ -14,7 +14,7 @@ test('a mathematical lecture is read and drawn: formulas as maths, the proof in 
   await page.goto('/');
   await createCourse(page, 'Algorithms', 'CS201');
   await importFiles(page, [{ name: 'Divide and conquer.pptx', buffer: Buffer.from(mathDeck()) }]);
-  await expect(page.getByText(/Imported: 12 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 12장/)).toBeVisible();
   await page.locator('a[href*="/lecture/"]').first().click();
   const id = page.url().match(/\/lecture\/([^/?#]+)/)![1]!;
   const content = page.getByRole('tabpanel');
@@ -22,13 +22,13 @@ test('a mathematical lecture is read and drawn: formulas as maths, the proof in 
   // the sum: drawn on the slide and in the extracted view, none of it left as raw LaTeX
   await page.goto(`/lecture/${id}?slide=4`);
   await expect(content.locator('.katex').first()).toBeVisible();
-  await expect(page.locator('section[aria-label="Slide"] .katex').first()).toBeVisible();
+  await expect(page.locator('section[aria-label="슬라이드"] .katex').first()).toBeVisible();
   await expect(content.getByText('Claim: for every n ≥ 1 the following holds.')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('math-sum.png'), fullPage: true });
 
   // the proof: the five steps in order, and the formula under them
   await page.goto(`/lecture/${id}?slide=5`);
-  const steps = content.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Body' }) }).getByRole('listitem');
+  const steps = content.getByRole('article').filter({ has: page.getByRole('heading', { name: '본문' }) }).getByRole('listitem');
   await expect(steps).toHaveCount(5);
   await expect(steps.nth(0)).toContainText('Base case');
   await expect(steps.nth(1)).toContainText('Inductive hypothesis');
@@ -64,15 +64,15 @@ test('a mathematical lecture is read and drawn: formulas as maths, the proof in 
 
   // search finds a formula by its readable text and a word of the proof
   await page.goto('/');
-  const search = page.getByLabel('Search all lectures');
+  const search = page.getByLabel('모든 강의 검색');
   await search.fill('inductive hypothesis');
   await search.press('Enter');
   await expect(page.getByRole('link', { name: /Proof by induction/ }).first()).toBeVisible();
 
   // the report counts the formulas and says nothing was half-understood
   await page.goto(`/lecture/${id}/report`);
-  await expect(page.getByRole('heading', { level: 1, name: 'Extraction report' })).toBeVisible();
-  await expect(page.getByRole('term').filter({ hasText: 'Equations' }).locator('xpath=following-sibling::*[1]')).toHaveText('7');
+  await expect(page.getByRole('heading', { level: 1, name: '추출 보고서' })).toBeVisible();
+  await expect(page.getByRole('term').filter({ hasText: '수식' }).locator('xpath=following-sibling::*[1]')).toHaveText('7');
   expect(problems).toEqual([]);
 });
 
@@ -81,7 +81,7 @@ test('marking points with formulas are drawn as maths in the exam and its result
   await page.goto('/');
   await createCourse(page, 'Algorithms', 'CS201');
   await importFiles(page, [{ name: 'Divide and conquer.pptx', buffer: Buffer.from(mathDeck()) }]);
-  await expect(page.getByText(/Imported: 12 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 12장/)).toBeVisible();
   await page.getByRole('link', { name: /Algorithms/ }).first().click();
 
   const pack = {
@@ -106,30 +106,30 @@ test('marking points with formulas are drawn as maths in the exam and its result
       },
     ],
   };
-  await page.getByRole('button', { name: 'Study packs from your own AI' }).click();
-  await page.getByRole('menuitem', { name: 'Import a study pack…' }).click();
-  const imp = page.getByRole('dialog', { name: 'Import a study pack' });
-  await imp.getByLabel('Pack JSON').fill(JSON.stringify(pack));
-  await imp.getByRole('button', { name: 'Check this pack' }).click();
-  await expect(imp.getByText(/1 of 1 cited quotes were found on the slide/)).toBeVisible(); // the quote is a formula written as LaTeX
-  await imp.getByRole('button', { name: 'Import 1 item for review' }).click();
-  await tab(page, 'Practice and exams').click();
-  await page.getByRole('button', { name: 'Approve all with no source problems' }).click();
-  await page.getByRole('button', { name: 'Build an exam' }).click();
-  await page.getByRole('dialog', { name: 'Build a practice exam' }).getByRole('button', { name: 'Start exam' }).click();
+  await page.getByRole('button', { name: '학습 팩 만들기와 가져오기' }).click();
+  await page.getByRole('menuitem', { name: '학습 팩 가져오기…' }).click();
+  const imp = page.getByRole('dialog', { name: '학습 팩 가져오기' });
+  await imp.getByLabel('팩 JSON').fill(JSON.stringify(pack));
+  await imp.getByRole('button', { name: '이 팩 확인' }).click();
+  await expect(imp.getByText(/인용문 1개 중 1개를 슬라이드에서 찾았습니다/)).toBeVisible(); // the quote is a formula written as LaTeX
+  await imp.getByRole('button', { name: '검토할 항목 1개 가져오기' }).click();
+  await tab(page, '연습과 시험').click();
+  await page.getByRole('button', { name: /^출처 문제가 없는 (?:카드|문제) 모두 승인$/ }).click();
+  await page.getByRole('button', { name: '시험 만들기' }).click();
+  await page.getByRole('dialog', { name: '모의시험 만들기' }).getByRole('button', { name: '시험 시작' }).click();
 
-  const main = page.getByRole('main', { name: 'Question' });
+  const main = page.getByRole('main', { name: '문제' });
   await expect(main.locator('.katex').first()).toBeVisible(); // the question's own formula
-  await main.getByLabel('Your answer').fill('The sum is n(n+1)/2 = 10*11/2 = 55.');
+  await main.getByLabel('내 답').fill('The sum is n(n+1)/2 = 10*11/2 = 55.');
   await page.waitForTimeout(700);
-  await page.getByRole('button', { name: 'Submit' }).first().click();
-  await page.getByRole('dialog', { name: 'Submit your exam?' }).getByRole('button', { name: 'Submit now' }).click();
+  await page.getByRole('button', { name: '제출' }).first().click();
+  await page.getByRole('dialog', { name: '시험을 제출할까요?' }).getByRole('button', { name: '지금 제출' }).click();
   await expect(page).toHaveURL(/\/results$/);
 
   // the marking scheme: formulas drawn, the dollar amounts left as typed
   const item = page.getByRole('listitem').filter({ hasText: 'Use the formula on the slide' }).first();
-  await expect(item.getByText('Model answer', { exact: true })).toBeVisible();
-  const scheme = item.getByText('What the marks are for').locator('xpath=following-sibling::ul[1]');
+  await expect(item.getByText('모범 답안', { exact: true })).toBeVisible();
+  const scheme = item.getByText('채점 기준', { exact: true }).locator('xpath=following-sibling::ul[1]');
   await expect(scheme.locator('.katex')).toHaveCount(3); // the formula in point 1, the substitution in point 2 (two)
   await expect(scheme.getByRole('listitem').nth(2)).toContainText('Evaluates it to 55 (not $5 or $10)'); // a price is not maths
   await expect(scheme.getByRole('listitem').nth(2).locator('.katex')).toHaveCount(0);
@@ -141,10 +141,10 @@ test('marking points with formulas are drawn as maths in the exam and its result
 
 test('formulas, code and the table stay inside a phone screen, with no sideways scrolling of the page @mobile', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Open menu' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기' })).toBeVisible();
   await createCourse(page, 'Algorithms', 'CS201');
   await importFiles(page, [{ name: 'Divide and conquer.pptx', buffer: Buffer.from(mathDeck()) }]);
-  await expect(page.getByText(/Imported: 12 slides/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 12장/)).toBeVisible();
   await page.getByRole('link', { name: 'Divide and conquer' }).click();
   const id = page.url().match(/\/lecture\/([^/?#]+)/)![1]!;
   for (const n of [4, 5, 6, 7, 8, 9, 11]) {
@@ -174,7 +174,7 @@ test('a space inside an equation stays a space, and a subscript in a title is li
   await page.goto('/');
   await createCourse(page, 'Theory', 'CS301');
   await importFiles(page, [{ name: 'Spaces.pptx', buffer: Buffer.from(buildPptx({ slides: [{ shapes: title + body }] })) }]);
-  await expect(page.getByText(/Imported: 1 slides?/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 1장?/)).toBeVisible();
   await page.locator('a[href*="/lecture/"]').first().click();
   const id = page.url().match(/\/lecture\/([^/?#]+)/)![1]!;
   await page.goto(`/lecture/${id}?slide=1`);
@@ -188,7 +188,7 @@ test('a space inside an equation stays a space, and a subscript in a title is li
   });
   expect(seen).toMatch(/Show\s+N\s+and\s+Z\s+have the same size/);
   // the lists name the slide the way it reads, without the braces of its subscript
-  await expect(page.getByRole('button', { name: /^Slide 1: A_TM is undecidable/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^슬라이드 1: A_TM is undecidable/ })).toBeVisible();
   await expect(page.getByText('A_{TM}')).toHaveCount(0);
   expect(problems).toEqual([]);
 });
@@ -208,9 +208,9 @@ test('a blank line and the space before a paragraph keep the text where PowerPoi
   await page.goto('/');
   await createCourse(page, 'Spacing', 'CS302');
   await importFiles(page, [{ name: 'Spacing.pptx', buffer: Buffer.from(buildPptx({ slides: [{ shapes: sp(2, paragraphs) }] })) }]);
-  await expect(page.getByText(/Imported: 1 slides?/)).toBeVisible();
+  await expect(page.getByText(/가져옴: 슬라이드 1장?/)).toBeVisible();
   await page.locator('a[href*="/lecture/"]').first().click();
-  const canvas = page.locator('section[aria-label="Slide"]').first();
+  const canvas = page.locator('section[aria-label="슬라이드"]').first();
   await expect(canvas.getByText('Second line')).toBeVisible();
   const first = (await canvas.getByText('First line').filter({ visible: true }).boundingBox())!;
   const second = (await canvas.getByText('Second line').filter({ visible: true }).boundingBox())!;

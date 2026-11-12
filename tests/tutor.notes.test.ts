@@ -42,7 +42,7 @@ describe('which of my notes the tutor may see', () => {
     const picked = pickNotes(mixed, 'reductions');
     expect(picked.map((n) => n.noteId).sort()).toEqual(['x', 'z']); // 'w' (imported and auto-made blocks) is not the student's own words
     expect(picked.find((n) => n.noteId === 'x')!.text).toBe('my own words about reductions');
-    expect(picked.find((n) => n.noteId === 'z')!.text.endsWith('[…shortened]')).toBe(true);
+    expect(picked.find((n) => n.noteId === 'z')!.text.endsWith('[…줄임]')).toBe(true);
     expect(picked.find((n) => n.noteId === 'z')!.text.length).toBeLessThan(3_100);
   });
 });

@@ -36,7 +36,7 @@ const Thumb = memo(function Thumb({ slide, slideWidth, slideHeight, media, curre
         type="button"
         onClick={() => onSelect(slide.index)}
         aria-current={current ? 'true' : undefined}
-        aria-label={`Slide ${slide.index}: ${title}${slide.confidence !== 'high' ? `, ${slide.confidence === 'low' ? 'needs attention' : 'check'}` : ''}${slide.hidden ? ', hidden slide' : ''}`}
+        aria-label={`슬라이드 ${slide.index}: ${title}${slide.confidence !== 'high' ? `, ${slide.confidence === 'low' ? '주의 필요' : '확인 필요'}` : ''}${slide.hidden ? ', 숨긴 슬라이드' : ''}`}
         className={`group flex w-full flex-col gap-1 rounded-[var(--radius-control)] p-1.5 text-left ${current ? 'bg-accent-soft ring-2 ring-accent' : 'hover:bg-sunken'}`}
       >
         <div ref={ref} style={{ aspectRatio: `${slideWidth} / ${slideHeight}` }} className="w-full overflow-hidden rounded-[3px] bg-sunken ring-1 ring-rule-strong">
@@ -55,7 +55,7 @@ const Thumb = memo(function Thumb({ slide, slideWidth, slideHeight, media, curre
 
 export function Filmstrip({ slides, slideWidth, slideHeight, media, current, onSelect, orientation }: { slides: SlideData[]; slideWidth: number; slideHeight: number; media: Map<string, string>; current: number; onSelect: (n: number) => void; orientation: 'vertical' | 'horizontal' }) {
   return (
-    <ol className={orientation === 'vertical' ? 'flex flex-col gap-1' : 'flex gap-1 overflow-x-auto pb-1 [&>li]:w-36 [&>li]:shrink-0'} aria-label="Slides">
+    <ol className={orientation === 'vertical' ? 'flex flex-col gap-1' : 'flex gap-1 overflow-x-auto pb-1 [&>li]:w-36 [&>li]:shrink-0'} aria-label="슬라이드">
       {slides.map((s) => (
         <Thumb key={s.index} slide={s} slideWidth={slideWidth} slideHeight={slideHeight} media={media} current={s.index === current} onSelect={onSelect} />
       ))}

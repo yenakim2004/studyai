@@ -54,7 +54,7 @@ describe('the demo build', () => {
   });
 
   it('has no AI client, no provider address and no key in any script', () => {
-    const bad = /\/api\/(?:health|auth|owner|ai)|api\.anthropic\.com|x-api-key|sk-ant-|anthropic-version|generativelanguage\.googleapis\.com|x-goog-api-key|AIza[0-9A-Za-z_-]{20,}|GEMINI_API_KEY/;
+    const bad = /\/api\/(?:health|status|chatgpt|auth|owner|ai)|api\.anthropic\.com|x-api-key|sk-ant-|anthropic-version|generativelanguage\.googleapis\.com|x-goog-api-key|AIza[0-9A-Za-z_-]{20,}|GEMINI_API_KEY/;
     const all = scripts(demo);
     expect(all.length).toBeGreaterThan(10);
     for (const js of all) expect(js).not.toMatch(bad);
@@ -62,8 +62,8 @@ describe('the demo build', () => {
 
   it('contains the sample course (loaded on demand) and the demo banner', () => {
     const all = scripts(demo).join('\n');
-    expect(all).toContain('Skyship Navigation (invented demo course)');
-    expect(all).toContain('AI features are not available in the demo.');
+    expect(all).toContain('비행선 항법(가상의 데모 과목)');
+    expect(all).toContain('데모에서는 AI 기능을 쓸 수 없습니다.');
     expect(readdirSync(join(demo, 'assets')).some((f) => /^sample-course-.*\.js$/.test(f))).toBe(true);
   });
 });
@@ -75,8 +75,8 @@ describe('the regular build', () => {
     expect(html).not.toContain('http-equiv'); // its policy is sent as headers
     expect(readFileSync(join(regular, '_headers'), 'utf8')).toContain("frame-ancestors 'none'");
     const all = scripts(regular).join('\n');
-    expect(all).toContain('/api/health');
-    for (const demoOnly of ['Skyship Navigation', 'Invented Author', 'Load the sample course', 'AI features are not available in the demo', 'sample-course']) expect(all, demoOnly).not.toContain(demoOnly);
+    expect(all).toContain('/api/status');
+    for (const demoOnly of ['비행선 항법', '가상의 저자', '예시 과목 불러오기', '데모에서는 AI 기능을 쓸 수 없습니다', 'sample-course']) expect(all, demoOnly).not.toContain(demoOnly);
     expect(readdirSync(join(regular, 'assets')).some((f) => /sample|demo/i.test(f))).toBe(false);
     expect(existsSync(join(regular, '404.html'))).toBe(false);
   });

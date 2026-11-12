@@ -65,7 +65,7 @@ describe('choosing questions', () => {
     expect(a.available).toBe(10);
     const few = selectQuestions(bank.slice(0, 3), config({ count: 8 }), mulberry32(1));
     expect(few.ids).toHaveLength(3);
-    expect(few.notes.join(' ')).toMatch(/Only 3 matching questions available \(you asked for 8\)/);
+    expect(few.notes.join(' ')).toMatch(/조건에 맞는 문제가 3개뿐입니다\(요청: 8개\)/);
   });
 
   it('steers towards a total mark target and says when it cannot hit it', () => {
@@ -74,18 +74,18 @@ describe('choosing questions', () => {
     expect(sel.totalMarks).toBeGreaterThanOrEqual(28);
     expect(sel.totalMarks).toBeLessThanOrEqual(31.5);
     const impossible = selectQuestions([q({ marks: 40 })], config({ count: 3, totalMarks: 10 }), mulberry32(3));
-    expect(impossible.notes.join(' ')).toMatch(/closest total available/);
+    expect(impossible.notes.join(' ')).toMatch(/만들 수 있는 가장 가까운 총점은/);
   });
 });
 
 describe('automatic marking (multiple choice / true-false)', () => {
   it('single correct option: all or nothing; unanswered and invalid ids score zero', () => {
     const question = mcq();
-    expect(autoGrade(question, { optionIds: ['o1'], timeMs: 0 })).toMatchObject({ marks: 2, max: 2, by: 'auto', comment: 'Correct.' });
-    expect(autoGrade(question, { optionIds: ['o2'], timeMs: 0 })).toMatchObject({ marks: 0, comment: 'Incorrect.' });
+    expect(autoGrade(question, { optionIds: ['o1'], timeMs: 0 })).toMatchObject({ marks: 2, max: 2, by: 'auto', comment: '정답입니다.' });
+    expect(autoGrade(question, { optionIds: ['o2'], timeMs: 0 })).toMatchObject({ marks: 0, comment: '오답입니다.' });
     expect(autoGrade(question, { optionIds: ['o1', 'o2'], timeMs: 0 })!.marks).toBe(0); // ticking everything is not an answer
-    expect(autoGrade(question, undefined)).toMatchObject({ marks: 0, comment: 'No answer given.' });
-    expect(autoGrade(question, { optionIds: ['nope'], timeMs: 0 })!.comment).toBe('No answer given.');
+    expect(autoGrade(question, undefined)).toMatchObject({ marks: 0, comment: '답을 입력하지 않았습니다.' });
+    expect(autoGrade(question, { optionIds: ['nope'], timeMs: 0 })!.comment).toBe('답을 입력하지 않았습니다.');
   });
 
   it('several correct options: credit for right picks, deduction for wrong ones, never negative', () => {
@@ -94,7 +94,7 @@ describe('automatic marking (multiple choice / true-false)', () => {
     expect(autoGrade(question, { optionIds: ['a'], timeMs: 0 })!.marks).toBe(2);
     expect(autoGrade(question, { optionIds: ['a', 'c'], timeMs: 0 })!.marks).toBe(0);
     expect(autoGrade(question, { optionIds: ['c', 'd'], timeMs: 0 })!.marks).toBe(0);
-    expect(autoGrade(question, { optionIds: ['a'], timeMs: 0 })!.comment).toMatch(/1 of 2 right answers/);
+    expect(autoGrade(question, { optionIds: ['a'], timeMs: 0 })!.comment).toMatch(/정답 2개 중 1개를 골랐습니다/);
   });
 
   it('does not mark written questions', () => {
@@ -133,7 +133,7 @@ describe('self-marking against marking points', () => {
     expect(wordCount("Don't panic: it's 3 words? No — it's more.")).toBe(8);
     expect(wordCount(undefined)).toBe(0);
     const s = q({ expectedWords: [5, 10] });
-    expect(lengthAdvice(s, '')).toMatchObject({ ok: false, message: 'Aim for 5–10 words.' });
+    expect(lengthAdvice(s, '')).toMatchObject({ ok: false, message: '5–10단어를 목표로 쓰세요.' });
     expect(lengthAdvice(s, 'one two three')).toMatchObject({ ok: false, words: 3 });
     expect(lengthAdvice(s, 'one two three four five six')).toMatchObject({ ok: true });
     expect(lengthAdvice(s, 'a b c d e f g h i j k l')).toMatchObject({ ok: false });
@@ -187,7 +187,7 @@ describe('attempt lifecycle (autosave, resume, submit)', () => {
 
   it('requires questions and autosaves answers, flags and elapsed time without losing earlier ones', async () => {
     const { course, questions, exam } = await setup();
-    await expect(createExam(db, course.id, config(), [])).rejects.toThrow(/at least one question/);
+    await expect(createExam(db, course.id, config(), [])).rejects.toThrow(/문제가 하나 이상 있어야 합니다/);
     const a = await startAttempt(db, exam.id, 1000);
     expect(a).toMatchObject({ status: 'in-progress', elapsedMs: 0, startedAt: 1000, answers: {}, grades: {} });
     await saveAnswer(db, a.id, 'qw', { text: 'first draft' });
@@ -211,13 +211,13 @@ describe('attempt lifecycle (autosave, resume, submit)', () => {
     const a = await startAttempt(db, exam.id);
     await saveAnswer(db, a.id, 'qm', { optionIds: ['o1'] });
     await saveAnswer(db, a.id, 'qw', { text: 'my answer' });
-    await expect(saveGrade(db, a.id, 'qw', markManual(questions[1]!, 2))).rejects.toThrow(/Submit the exam before marking/);
+    await expect(saveGrade(db, a.id, 'qw', markManual(questions[1]!, 2))).rejects.toThrow(/채점하기 전에 시험을 제출하세요/);
     const done = await submitAttempt(db, a.id, questions, 120_000, 5000);
     expect(done).toMatchObject({ status: 'submitted', submittedAt: 5000, elapsedMs: 120_000 });
     expect(done.grades['qm']).toMatchObject({ marks: 2, by: 'auto' });
     expect(done.grades['qw']).toBeUndefined();
-    await expect(saveAnswer(db, a.id, 'qw', { text: 'changed my mind' })).rejects.toThrow(/already been submitted/);
-    await expect(submitAttempt(db, a.id, questions, 0)).rejects.toThrow(/already been submitted/);
+    await expect(saveAnswer(db, a.id, 'qw', { text: 'changed my mind' })).rejects.toThrow(/이미 제출한 응시입니다/);
+    await expect(submitAttempt(db, a.id, questions, 0)).rejects.toThrow(/이미 제출한 응시입니다/);
 
     await saveGrade(db, a.id, 'qw', markWithRubric(questions[1]!, { r1: 2 }));
     const scored = scoreAttempt(questions, (await db.attempts.get(a.id))!);
@@ -228,7 +228,16 @@ describe('attempt lifecycle (autosave, resume, submit)', () => {
     const { questions, exam } = await setup();
     const a = await startAttempt(db, exam.id);
     const done = await submitAttempt(db, a.id, questions, 10);
-    expect(done.grades['qm']).toMatchObject({ marks: 0, comment: 'No answer given.' });
+    expect(done.grades['qm']).toMatchObject({ marks: 0, comment: '답을 입력하지 않았습니다.' });
     expect(scoreAttempt(questions, done).results.map((r) => r.outcome)).toEqual(['zero', 'unanswered']);
+  });
+});
+
+describe('keyword hints on a Korean answer', () => {
+  it('finds a Korean point in an answer that uses other particles, and misses one that is absent', () => {
+    const question = q({ type: 'short', marks: 2, rubric: [{ id: 'a', text: '방화벽은 트래픽을 걸러 낸다', marks: 1 }, { id: 'b', text: '암호화는 데이터를 보호한다', marks: 1 }] });
+    const hints = keywordHints(question, '방화벽이 트래픽을 걸러 냅니다.');
+    expect(hints.find((h) => h.pointId === 'a')!.status).toBe('likely');
+    expect(hints.find((h) => h.pointId === 'b')!.status).toBe('missing');
   });
 });

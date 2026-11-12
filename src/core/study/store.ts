@@ -55,7 +55,7 @@ export interface NewCard {
 export async function createCard(db: StudyDB, input: NewCard, now = Date.now()): Promise<CardRow> {
   const front = input.front.trim();
   const back = input.back.trim();
-  if (!front || !back) throw new Error('A card needs both a front and a back.');
+  if (!front || !back) throw new Error('카드에는 앞면과 뒷면이 모두 있어야 합니다.');
   const row: CardRow = {
     id: newId(),
     courseId: input.courseId,
@@ -81,9 +81,9 @@ export async function createCard(db: StudyDB, input: NewCard, now = Date.now()):
 /** Edit a card. Editing detaches it from its import pack so "remove pack" can never delete your work. */
 export async function updateCard(db: StudyDB, id: string, patch: Partial<Pick<CardRow, 'type' | 'front' | 'back' | 'tags' | 'deck' | 'basis' | 'sources' | 'lectureId'>>, now = Date.now()): Promise<void> {
   const have = await db.cards.get(id);
-  if (!have) throw new Error('Card not found.');
+  if (!have) throw new Error('카드를 찾을 수 없습니다.');
   const next: CardRow = { ...have, ...patch, updatedAt: now };
-  if ((patch.front !== undefined && !patch.front.trim()) || (patch.back !== undefined && !patch.back.trim())) throw new Error('A card needs both a front and a back.');
+  if ((patch.front !== undefined && !patch.front.trim()) || (patch.back !== undefined && !patch.back.trim())) throw new Error('카드에는 앞면과 뒷면이 모두 있어야 합니다.');
   if (patch.front !== undefined || patch.back !== undefined) delete next.packId;
   await db.cards.put(next);
 }
@@ -110,8 +110,8 @@ export async function resetCardSchedule(db: StudyDB, id: string, now = Date.now(
 export async function answerCard(db: StudyDB, cardId: string, rating: Rating, durationMs: number, now = Date.now()): Promise<CardRow> {
   return db.transaction('rw', [db.cards, db.reviews], async () => {
     const card = await db.cards.get(cardId);
-    if (!card) throw new Error('Card not found.');
-    if (card.status !== 'approved') throw new Error('Only approved cards can be reviewed.');
+    if (!card) throw new Error('카드를 찾을 수 없습니다.');
+    if (card.status !== 'approved') throw new Error('승인된 카드만 복습할 수 있습니다.');
     const next: CardRow = { ...card, fsrs: reviewCard(card.fsrs, rating, now) };
     await db.cards.put(next);
     await db.reviews.add({ id: newId(), cardId, courseId: card.courseId, at: now, rating, stateBefore: card.fsrs.state, durationMs: Math.max(0, Math.round(durationMs)) });
@@ -125,7 +125,7 @@ export async function answerCard(db: StudyDB, cardId: string, rating: Rating, du
 
 export async function createNote(db: StudyDB, input: { courseId: string; lectureId?: string; title: string; kind?: NoteKind; blocks?: Omit<NoteBlock, 'id' | 'updatedAt'>[] }, now = Date.now()): Promise<NoteRow> {
   const title = input.title.trim();
-  if (!title) throw new Error('A note needs a title.');
+  if (!title) throw new Error('노트에는 제목이 있어야 합니다.');
   const row: NoteRow = {
     id: newId(),
     courseId: input.courseId,
@@ -146,7 +146,7 @@ export async function createNote(db: StudyDB, input: { courseId: string; lecture
  */
 export async function saveNoteBlocks(db: StudyDB, noteId: string, blocks: NoteBlock[], now = Date.now()): Promise<void> {
   const have = await db.notes.get(noteId);
-  if (!have) throw new Error('Note not found.');
+  if (!have) throw new Error('노트를 찾을 수 없습니다.');
   const before = new Map(have.blocks.map((b) => [b.id, b]));
   const next = blocks.map((b) => {
     const old = before.get(b.id);
@@ -160,7 +160,7 @@ export async function saveNoteBlocks(db: StudyDB, noteId: string, blocks: NoteBl
 }
 
 export async function renameNote(db: StudyDB, id: string, title: string, now = Date.now()): Promise<void> {
-  if (!title.trim()) throw new Error('A note needs a title.');
+  if (!title.trim()) throw new Error('노트에는 제목이 있어야 합니다.');
   await db.notes.update(id, { title: title.trim(), updatedAt: now });
 }
 
@@ -173,8 +173,8 @@ export async function deleteNote(db: StudyDB, id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function saveQuestion(db: StudyDB, q: QuestionRow, now = Date.now()): Promise<QuestionRow> {
-  if (!q.prompt.trim()) throw new Error('A question needs a prompt.');
-  if (q.options && !q.options.some((o) => o.correct)) throw new Error('Mark at least one option as correct.');
+  if (!q.prompt.trim()) throw new Error('문제에는 질문 내용이 있어야 합니다.');
+  if (q.options && !q.options.some((o) => o.correct)) throw new Error('정답 보기를 하나 이상 표시하세요.');
   const row: QuestionRow = { ...q, updatedAt: now };
   delete row.packId;
   await db.questions.put(row);

@@ -81,11 +81,11 @@ export function selectQuestions(bank: QuestionRow[], config: ExamConfig, rng: ()
         sum += q.marks;
       }
     }
-    if (Math.abs(sum - target) > target * 0.1) notes.push(`The closest total available is ${round2(sum)} marks (you asked for ${target}).`);
+    if (Math.abs(sum - target) > target * 0.1) notes.push(`만들 수 있는 가장 가까운 총점은 ${round2(sum)}점입니다(요청: ${target}점).`);
   } else {
     chosen = pool.slice(0, config.count);
   }
-  if (chosen.length < config.count) notes.push(`Only ${chosen.length} matching question${chosen.length === 1 ? '' : 's'} available (you asked for ${config.count}). Import or write more, or loosen the filters.`);
+  if (chosen.length < config.count) notes.push(`조건에 맞는 문제가 ${chosen.length}개뿐입니다(요청: ${config.count}개). 문제를 더 가져오거나 직접 쓰거나, 조건을 넓혀 보세요.`);
   return { ids: chosen.map((q) => q.id), totalMarks: round2(chosen.reduce((n, q) => n + q.marks, 0)), available: pool.length, notes };
 }
 
@@ -102,15 +102,15 @@ export function autoGrade(q: QuestionRow, a: AnswerState | undefined, now = Date
   const correct = options.filter((o) => o.correct).map((o) => o.id);
   const chosen = [...new Set(a?.optionIds ?? [])].filter((id) => options.some((o) => o.id === id));
   const mk = (marks: number, comment: string): Grade => ({ marks: round2(marks), max: q.marks, items: [], comment, by: 'auto', gradedAt: now });
-  if (chosen.length === 0) return mk(0, 'No answer given.');
+  if (chosen.length === 0) return mk(0, '답을 입력하지 않았습니다.');
   if (correct.length === 1) {
-    return chosen.length === 1 && chosen[0] === correct[0] ? mk(q.marks, 'Correct.') : mk(0, 'Incorrect.');
+    return chosen.length === 1 && chosen[0] === correct[0] ? mk(q.marks, '정답입니다.') : mk(0, '오답입니다.');
   }
   // Several correct options: credit for each right pick, deduct for each wrong pick, never below zero.
   const right = chosen.filter((id) => correct.includes(id)).length;
   const wrong = chosen.length - right;
   const fraction = Math.max(0, (right - wrong) / correct.length);
-  return mk(q.marks * fraction, fraction === 1 ? 'Correct.' : fraction === 0 ? 'Incorrect.' : `Partly correct: ${right} of ${correct.length} right answers chosen${wrong ? `, ${wrong} wrong` : ''}.`);
+  return mk(q.marks * fraction, fraction === 1 ? '정답입니다.' : fraction === 0 ? '오답입니다.' : `부분 정답: 정답 ${correct.length}개 중 ${right}개를 골랐습니다${wrong ? `(오답 ${wrong}개 선택)` : ''}.`);
 }
 
 /** Validate and build a self/manual mark from per-point awards. Marks are clamped to what each point is worth. */
@@ -148,9 +148,11 @@ export function keywordHints(q: QuestionRow, answer: string): PointHint[] {
       const matched = p.keywords.filter((k) => text.includes(k.toLowerCase()));
       return { pointId: p.id, matched, status: matched.length === p.keywords.length ? 'likely' : matched.length > 0 ? 'unclear' : 'missing' };
     }
-    const words = [...new Set((p.text.toLowerCase().match(WORD) ?? []).filter((w) => w.length >= 5 && !STOP.has(w)))];
+    // Korean words are short and carry a particle ("방화벽은"): two syllables count, and the last syllable may differ.
+    const korean = (w: string) => /[가-힣]/.test(w);
+    const words = [...new Set((p.text.toLowerCase().match(WORD) ?? []).filter((w) => w.length >= (korean(w) ? 2 : 5) && !STOP.has(w)))];
     if (words.length === 0) return { pointId: p.id, matched: [], status: 'unclear' };
-    const matched = words.filter((w) => answerWords.has(w.replace(/s$/, '')));
+    const matched = words.filter((w) => (korean(w) ? text.includes(w.length > 2 ? w.slice(0, -1) : w) : answerWords.has(w.replace(/s$/, ''))));
     const share = matched.length / words.length;
     return { pointId: p.id, matched, status: share >= 0.6 ? 'likely' : share >= 0.3 ? 'unclear' : 'missing' };
   });
@@ -165,10 +167,10 @@ export function lengthAdvice(q: Pick<QuestionRow, 'expectedWords'>, text: string
   if (!q.expectedWords) return undefined;
   const [lo, hi] = q.expectedWords;
   const words = wordCount(text);
-  if (words === 0) return { words, ok: false, message: `Aim for ${lo}–${hi} words.` };
-  if (words < lo) return { words, ok: false, message: `${words} words so far. Aim for ${lo}–${hi}.` };
-  if (words > hi) return { words, ok: false, message: `${words} words. That is long; the expected length is ${lo}–${hi}.` };
-  return { words, ok: true, message: `${words} words (expected ${lo}–${hi}).` };
+  if (words === 0) return { words, ok: false, message: `${lo}–${hi}단어를 목표로 쓰세요.` };
+  if (words < lo) return { words, ok: false, message: `지금 ${words}단어입니다. ${lo}–${hi}단어를 목표로 하세요.` };
+  if (words > hi) return { words, ok: false, message: `${words}단어입니다. 깁니다. 예상 길이는 ${lo}–${hi}단어입니다.` };
+  return { words, ok: true, message: `${words}단어(예상 ${lo}–${hi}단어).` };
 }
 
 // ---------------------------------------------------------------------------

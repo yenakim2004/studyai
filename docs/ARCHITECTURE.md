@@ -1,142 +1,105 @@
-# StudyAI architecture
+# StudyAI 구조
 
 ```
- ┌────────────────────────── Browser (all study data stays here) ──────────────────────────┐
- │  React UI ──► Library service (Dexie / IndexedDB)  ◄──► Backup ZIP (export / import)    │
- │     │              │  courses · lectures · slides · media(Blob) · original .pptx(Blob)    │
- │     │              └► Search (MiniSearch, rebuilt from slides)                            │
- │     └─ upload ─► Web Worker ─► PPTX engine (src/core/pptx) ─► ParsedDeck + report         │
- └───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                             │ only when the user asks AI & consents
-                                   ┌─────────▼─────────┐   secrets: provider keys, owner hash
-                                   │ Cloudflare Worker │   Durable Object (SQLite): counters
-                                   │  auth · allowlist │──► Gemini Free Tier  (owner-attested)
-                                   │  limits · logging │
-                                   └───────────────────┘
+ ┌─────────────────────────── 브라우저 (학습 데이터는 모두 여기) ───────────────────────────┐
+ │  React 화면 ──► 자료실 (Dexie / IndexedDB)  ◄──► 백업 ZIP (내보내기 / 가져오기)            │
+ │     │              │  과목 · 강의 · 슬라이드 · 미디어(Blob) · 원본 파일(Blob)                │
+ │     │              └► 검색 (MiniSearch, 슬라이드에서 다시 만듦)                             │
+ │     └─ 업로드 ─► Web Worker ─► PPTX 엔진 / PDF ─► ParsedDeck + 보고서                       │
+ └───────────────────────────────────────────┬──────────────────────────────────────────────┘
+                                             │ 사용자가 AI를 요청하고 동의했을 때만, 같은 주소로
+                                   ┌─────────▼──────────┐  pnpm local: 127.0.0.1:<포트>만
+                                   │ 로컬 Worker          │  Durable Object (SQLite): ChatGPT 계정(봉인)
+                                   │ 루프백 경계 · 계약    │──► OpenAI Responses API (내 ChatGPT 플랜)
+                                   └────────────────────┘
 ```
 
-An adapter for the Claude API exists in `src/core/ai/` but is **not wired into the Worker**, so the diagram shows only the Gemini path; see [FINANCIAL-SAFETY.md](FINANCIAL-SAFETY.md) section 5.
+AI 엔진은 ChatGPT 플랜 하나입니다. `pnpm local`(127.0.0.1 전용)에서만 Worker가 내 ChatGPT 계정으로 로그인하고, Durable Object가 그 계정을 토큰을 봉인한 채로 보관합니다. `worker/src/chatgpt.ts`가 소유합니다. [CHATGPT.md](CHATGPT.md)를 보세요.
 
-## Source layout
+## 소스 구성
 
-| Path | Responsibility |
+| 경로 | 역할 |
 |---|---|
-| `src/core/pptx/` | PPTX → `ParsedDeck` (see below). Pure TypeScript, runs in browser, worker and Node. |
-| `src/core/db/` | Dexie schema, zod schemas, library operations (import / reimport / duplicate detection / delete / reorder). |
-| `src/core/search/` | Per-slide full-text index with snippet generation. |
-| `src/core/study/` | Learning engine: study-pack validation and quote verification (`pack.ts`), FSRS scheduling and queues, notes, question bank, exam selection/marking/attempts, progress and recommendations, Markdown export. |
-| `src/core/backup/` | Export/import of the whole library (and study data) as one ZIP, with validation. |
-| `src/cli/` | Node CLI (`extract`, `validate`, `prompt`) that reuses the same engine; bundled to `dist-cli/lecture-cli.mjs`. |
-| `src/app/`, `src/ui/`, `src/pages/` | React app shell, components and pages. |
-| `src/demo/`, `src/app/ai.demo.ts` | The public static demo only (`pnpm build:demo`, see [DEMO.md](DEMO.md)): banner, the invented sample course, and the stub that replaces the AI client. Not part of the regular build. |
-| `.claude/skills/lecture-pack/` | Claude Code skill: lecture → study pack using the Claude Code subscription (no API). |
-| `worker/` | Cloudflare Worker (owner login, routing, AI endpoints) and its Durable Object (spend ledger, settings, login throttle). |
+| `src/core/pptx/` | PPTX → `ParsedDeck` (아래). 순수 TypeScript, 브라우저·Worker·Node에서 동작. |
+| `src/core/pdf/` | PDF → 같은 `ParsedDeck`. 쪽마다 화면과 글, 글이 없는 쪽 표시. |
+| `src/core/db/` | Dexie 스키마, zod 스키마, 자료실 작업(가져오기, 다시 가져오기, 중복 확인, 삭제, 순서 바꾸기). |
+| `src/core/search/` | 슬라이드별 전문 검색과 발췌문 생성. |
+| `src/core/study/` | 학습 엔진: 학습 자료 묶음 검사와 인용 확인(`pack.ts`), FSRS 일정과 대기열, 노트, 문제은행, 시험 출제·채점·응시, 진도와 추천, Markdown 내보내기. |
+| `src/core/backup/` | 자료실 전체(학습 데이터 포함)를 ZIP 하나로 내보내고 검사해서 가져오기. |
+| `src/core/tutor/` | 계약(브라우저가 요청할 수 있는 것), 서버 쪽 프롬프트, 답을 읽는 엄격한 파서, 슬라이드 문맥, 빠진 내용 찾기. |
+| `src/core/chatgpt/` | ChatGPT 플랜 프로토콜(로그인, ID 토큰 검증, 갱신, 해지, Responses 스트리밍, 모델 목록)과 고정 한국어 문장. 런타임 중립. |
+| `src/core/ai/request.ts` | 프롬프트가 만드는 요청 형식(시스템 문장과 대화). |
+| `src/cli/` | 같은 엔진을 쓰는 Node 명령줄 도구(`extract`, `validate`, `prompt`). `dist-cli/lecture-cli.mjs`로 묶음. |
+| `src/app/`, `src/ui/`, `src/pages/` | React 앱 틀, 구성 요소, 페이지. |
+| `src/demo/`, `src/app/ai.demo.ts` | 공개 정적 데모 전용(`pnpm build:demo`, [DEMO.md](DEMO.md)): 배너, 가상 예시 과목, AI 클라이언트를 대신하는 빈 모듈. 일반 빌드에는 없음. |
+| `.claude/skills/lecture-pack/` | Claude Code 스킬: Claude Code 구독으로 강의 → 학습 자료 묶음(API 없음). |
+| `worker/` | Worker(루프백 경계, 경로, AI 요청, ChatGPT 돌아오기)와 Durable Object(ChatGPT 계정). |
+| `scripts/local.mjs` | `pnpm local`: 로컬 실행기(봉인 키, env 파일, 빌드, 127.0.0.1에서 `wrangler dev`). |
 
-## The PPTX engine (what it does and does not do)
+## PPTX 엔진 (하는 일과 하지 않는 일)
 
-Pipeline: `ZipArchive` (limits, CRC) → `parseXml` (no DTD, namespace-canonical) →
-presentation → per slide: layout/master placeholder inheritance → shape tree walk →
-`SlideData` → media sniffing → confidence scoring → topics → `ExtractionReport`.
+처리 순서: `ZipArchive`(한도, CRC) → `parseXml`(DTD 없음, 네임스페이스 정규화) → 프레젠테이션 → 슬라이드마다 레이아웃·마스터 자리 표시자 상속 → 도형 트리 순회 → `SlideData` → 미디어 형식 판별 → 신뢰도 → 주제 → `ExtractionReport`.
 
-Extracted per slide: title (placeholder, else largest top text), ordered text with bullet levels,
-run formatting (bold/italic/sub/superscript/monospace/links), tables (with merges), chart data
-(from chart cache), SmartArt text + inferred hierarchy + cached drawing, equations
-(OMML → LaTeX + linear text), speaker notes, images (real MIME sniffed from bytes), alt text,
-hidden slides/shapes, animation presence, layout/master decorations (kept for preview only).
+슬라이드마다 읽는 것: 제목(자리 표시자, 없으면 위쪽의 가장 큰 글), 글머리 수준이 있는 글 순서, 서식(굵게·기울임·아래·위 첨자·고정폭·링크), 표(병합 포함), 차트 데이터(차트 캐시), SmartArt 글과 추정 계층과 캐시된 그림, 수식(OMML → LaTeX와 한 줄 글), 발표자 노트, 그림(바이트로 실제 MIME 판별), 대체 텍스트, 숨긴 슬라이드·도형, 애니메이션 유무, 레이아웃·마스터 장식(미리 보기용).
 
-Provenance: every element carries `{slide, id}`; `SourceRef` = `{lectureId, slide, elementId?, quote?}`
-is the type all later features (notes, flashcards, questions, tutor answers) use to cite sources.
+출처: 모든 요소에 `{slide, id}`가 있습니다. `SourceRef` = `{lectureId, slide, elementId?, quote?}`는 이후 모든 기능(노트, 플래시카드, 문제, 튜터 답)이 출처를 밝힐 때 쓰는 형식입니다.
 
-Honesty mechanisms:
-* **Flags** (`info` / `warning` / `attention`) for everything not reliably extracted.
-* **Completeness invariant:** every `<a:t>` in the slide XML must be captured by an element, otherwise the text is kept under “Unplaced text” and the slide is marked *low confidence*.
-* **Confidence:** `high` = no warnings; `medium` = something to double-check (SmartArt, large picture…); `low` = content missing (image-only slide, unreadable chart, EMF, OLE, failed slide).
-* The report lists “potentially missing content” by slide and a fixed list of engine limitations.
+정직하게 알리는 장치:
+* 제대로 읽지 못한 모든 것에 **표시**(`info` / `warning` / `attention`)를 붙입니다.
+* **빠짐없음 규칙:** 슬라이드 XML의 모든 `<a:t>`는 어떤 요소에 들어가야 합니다. 아니면 "배치되지 않은 글"로 남기고 슬라이드를 *신뢰도 낮음*으로 표시합니다.
+* **신뢰도:** `high` = 경고 없음, `medium` = 다시 볼 것이 있음(SmartArt, 큰 그림 등), `low` = 내용이 빠짐(그림만 있는 슬라이드, 읽을 수 없는 차트, EMF, OLE, 실패한 슬라이드).
+* 보고서는 슬라이드별 "빠졌을 수 있는 내용"과 엔진의 고정된 한계 목록을 보여 줍니다.
 
-Known gaps (reported in-app, listed in the extraction report): EMF/WMF images are not displayable;
-no OCR for text inside pictures; animation order not captured; SmartArt layout is not re-run
-(cached drawing is used); vertical text is shown horizontally.
+알려진 한계(앱 안과 추출 보고서에 표시): EMF/WMF 그림은 표시할 수 없음, 그림 안 글자 OCR 없음, 애니메이션 순서 미수집, SmartArt 배치를 다시 계산하지 않음(캐시된 그림 사용), 세로 글은 가로로 보임.
 
-## Data model (IndexedDB)
+## 데이터 모델 (IndexedDB)
 
-v1: `courses`, `lectures` (metadata + report), `slides` (`[lectureId+index]`), `media`, `files`
-(original .pptx for re-import), `settings`.
-v2 (additive): `cards`, `reviews`, `notes`, `questions`, `exams`, `attempts`, `packs` (import history).
-v3 (additive): `tutorSessions`, `tutorMessages` (chats; included in backups, backup format version 3).
-The spend ledger and the AI usage log live in the Durable Object, not in the browser.
-Slide-view progress is kept as `viewed:<lectureId>` settings; study sessions are *derived* from activity, not stored.
+v1: `courses`, `lectures`(메타데이터와 보고서), `slides`(`[lectureId+index]`), `media`, `files`(다시 가져오기용 원본), `settings`.
+v2(추가): `cards`, `reviews`, `notes`, `questions`, `exams`, `attempts`, `packs`(가져오기 기록).
+v3(추가): `tutorSessions`, `tutorMessages`(대화, 백업에 포함, 백업 형식 버전 3).
+슬라이드 열람 진도는 `viewed:<lectureId>` 설정으로 저장하고, 학습 세션은 저장하지 않고 활동에서 *계산*합니다. AI에 보내는 데 대한 동의(`aiConsentAt:chatgpt`)는 기기에만 두고 백업에 넣지 않습니다.
 
-## Study packs and source checking
+## 학습 자료 묶음과 출처 확인
 
-AI-generated material enters the app only as a `studyai-pack` v1 JSON document:
+AI가 만든 자료는 `studyai-pack` v1 JSON 문서로만 들어옵니다.
 
 ```
-lecture export (Markdown, slide numbers kept) ─► AI (Claude Code skill or any chat) ─► pack JSON
-pack JSON ─► extractJson ─► zod per item ─► lecture mapping (hash → title → manual)
-          ─► quote lookup on the real slide text ─► items stored as `pending` ─► you approve
+강의 내보내기(Markdown, 슬라이드 번호 유지) ─► AI(Claude Code 스킬이나 아무 채팅, 또는 앱의 ChatGPT 튜터) ─► 묶음 JSON
+묶음 JSON ─► extractJson ─► 항목마다 zod ─► 강의 연결(해시 → 제목 → 직접)
+          ─► 실제 슬라이드 글에서 인용 찾기 ─► `pending`으로 저장 ─► 내가 승인
 ```
 
-* A pack is untrusted input. Bad items are skipped and listed; good items still import.
-* A quote counts as found when its normalised form (Markdown, LaTeX commands and punctuation stripped) occurs in the normalised text of the cited slide. "..." in a quote skips words.
-* `basis` is one of `lecture | derived | outside | uncertain`. A `lecture` claim without a found quote is shown downgraded ("not verified"). Verification proves a quote exists, **not** that the item is well-made.
-* The same `validate` logic runs in the CLI, so the skill can refuse a pack before you ever import it.
+* 묶음은 믿을 수 없는 입력입니다. 나쁜 항목은 건너뛰고 목록으로 보여 주며, 좋은 항목은 그대로 가져옵니다.
+* 인용은 정규화한 형태(Markdown, LaTeX 명령, 문장 부호 제거)가 인용한 슬라이드의 정규화한 글에 있으면 찾은 것으로 칩니다. 인용 속 "..."는 단어를 건너뜁니다.
+* `basis`는 `lecture | derived | outside | uncertain` 가운데 하나입니다. 인용을 찾지 못한 `lecture` 주장은 낮춰서("확인 안 됨") 보여 줍니다. 확인은 인용이 있다는 것만 증명하며, 항목이 잘 만들어졌다는 뜻은 **아닙니다**.
+* 같은 `validate` 논리가 명령줄 도구에서도 돌아서, 스킬은 가져오기 전에 묶음을 거절할 수 있습니다.
 
-## AI budget guard (`src/core/ai`)
-
-The only path any future AI call may take. Pure TypeScript with no DOM or app imports, so the Worker can reuse it unchanged.
+## 로컬 AI 서버 (Worker + Durable Object 하나)
 
 ```
-ask(request) ─► gate ─► allowlist ─► size limits ─► RESERVE worst case ─► provider call ─► SETTLE
-                 │          │             │              │ one atomic store transaction     │
-                 └──────────┴─────────────┴──── any doubt: no call (fail closed) ◄─────────┘
+ 브라우저 (학습 데이터는 여기)                        내 컴퓨터, pnpm local
+ ─────────────────────────────                        ──────────────────────────────────────────────
+ 튜터 / 생성 / 채점 화면 ── 같은 주소 ──────────────►  Worker (/api/*와 /auth/*만, 나머지는 정적 파일)
+   "보낼 내용"을 먼저 보여 줌                             │ Host 정확히 127.0.0.1:<포트> · Origin/Fetch-Metadata
+   슬라이드 발췌를 기기에서 만듦                          │ 엄격한 요청 계약(zod) · 크기 제한 · JSON 본문
+                                                         ▼
+                                                 Durable Object "owner" (SQLite, 인스턴스 하나)
+                                                   ChatGPT 계정: 등록, 봉인한 토큰, 모델, 멈춤
+                                                   프롬프트를 만들고 모델을 고름
+                                                         │
+                                                         ▼
+                                                 OpenAI Responses API (store: false, 스트리밍)
 ```
 
-* `config.ts` — the provider-neutral `Policy` (models, prices, budgets, limits) that every provider's gate must produce, plus the Claude gate (switch + six dated confirmations + consistent budgets/limits). `gemini-config.ts` is the Gemini gate (four confirmations, limits under half the free quotas, shadow-dollar budgets with hard ceilings).
-* `gemini.ts` — Gemini adapter (fixed host, key in header, no tools, thinking billed as output, grounding flagged, quota vs billing-signal classification). `time.ts` — next Pacific midnight (daily quota reset), DST-safe.
-* `pricing.ts`, `money.ts` — integer nano-dollar accounting; official per-token prices; worst-case reservation = (input bound at the dearest class + max output) × 5/4.
-* `request.ts` — the only request shape allowed; input tokens bounded by UTF-8 bytes.
-* `ledger.ts` — spend, in-flight reservations, unresolved calls, breaker, capped per-request usage log. Pure transitions.
-* `store.ts` — `BudgetStore.transact()` is the atomicity contract; `MemoryBudgetStore` implements it for tests; the Worker implements it with a Durable Object.
-* `guard.ts` — `GuardedAi.ask / status / reconcileUnresolved / resetPause`.
-* `anthropic.ts` — adapter: fixed host, allowlisted body, error classification (refused vs unknown), key scrubbing.
+* `worker/src/app.ts`: 경로와 모든 입구 검사. Cloudflare를 가져오지 않아 Node에서 단위 테스트합니다.
+* `worker/src/loopback.ts`: "이 서버는 로컬 실행기"라는 단 하나의 판단과 API 경계, 돌아오기 페이지.
+* `worker/src/do.ts`: Durable Object. 저장소 행과 ChatGPT 계정을 잇는 얇은 층입니다. Durable Object 이름 `owner`는 첫 버전부터 쓰던 저장 주소라서 그대로 둡니다. 이전 버전이 남긴 다른 행은 읽지 않습니다.
+* `worker/src/chatgpt.ts`: ChatGPT 계정의 유일한 소유자(로그인, 봉인, 갱신, 해지, 멈춤, 모델).
+* `worker/src/test-entry.ts`: 가짜 OpenAI 발급자로 주소를 옮기는 로컬 테스트 입구. 운영 입구는 가져오지 않습니다(번들 테스트가 확인).
+* `src/app/ai.ts`, `src/ui/ai/*`, `src/pages/TutorPage.tsx`: 브라우저 쪽. 대화는 IndexedDB(스키마 v3)와 백업에 있고 서버는 아무것도 보관하지 않습니다.
 
-See [FINANCIAL-SAFETY.md](FINANCIAL-SAFETY.md) for the rules this implements and what only the person who deploys it can verify.
+AI 기능은 로컬 기능을 대신하지 않습니다. AI 답은 내가 저장할 때만 노트나 *대기 중* 플래시카드가 되고, 생성한 묶음은 일반 묶음 검사(실제 슬라이드에서 인용 확인, 내 승인)를 거치며, AI 채점은 "AI 추정"으로 저장되어 내가 바꿀 수 있습니다.
 
-## The private AI server (Worker + one Durable Object)
+## 시험 엔진
 
-```
- Browser (study data stays here)                    Cloudflare (free plan)
- ───────────────────────────────                    ─────────────────────────────────────────────
- Tutor / generator / grader UI ── same-origin ──►  Worker  (/api/* only; the app is static assets)
-   shows "what will be sent"                         │ Host allowlist · Origin/Fetch-Metadata CSRF check
-   builds slide excerpts locally                     │ owner-key login → HMAC-signed cookie (12 h)
-                                                     │ strict request contract (zod) · size limits
-                                                     ▼
-                                             Durable Object "owner" (SQLite, one instance)
-                                               settings + dated confirmations · login throttle
-                                               spend ledger · atomic reservations · breakers
-                                               builds the PROMPT · picks model and output cap
-                                                     │ GuardedAi → GeminiProvider
-                                                     ▼
-                                             Google Gemini API (free tier, key = Cloudflare secret)
-```
-
-* `worker/src/app.ts` — routing and every front-door check, with no Cloudflare imports so it is unit-tested in Node.
-* `worker/src/auth.ts` — owner key (SHA-256 compared in constant time), signed sessions, cookie attributes, host/origin rules.
-* `worker/src/do.ts` — the Durable Object: ledger (synchronous SQLite, atomic by construction), owner settings, confirmations, throttle, session epoch.
-* `worker/src/throttle.ts` and `worker/src/ledger-storage.ts` — the login-lock rules and the "a ledger that existed must not vanish" rule, as plain functions so they are unit-tested without Cloudflare.
-* `src/core/tutor/*` — the contract (what the browser may ask for), server-side prompts, and strict parsers for what comes back.
-* `src/app/ai.ts` and `src/ui/ai/*`, `src/pages/TutorPage.tsx` — the browser side. Chats live in IndexedDB (schema v3) and in backups; the server keeps none.
-* `worker/src/test-entry.ts` + `scripted-gemini.ts` — local test entry with a scripted fake model; the production entry never imports them (a test checks the bundle).
-
-Routes: `GET /api/health` (public) · `POST /api/auth/login|logout|logout-all` · `GET /api/auth/session` · `GET /api/owner/status` ·
-`POST /api/owner/config|attest|revoke|reconcile|reset-pause` · `POST /api/ai/ask` (tasks `tutor`, `generate`, `grade`).
-Everything except health, session and login needs the owner. There is no route that proxies arbitrary requests.
-
-The AI features never replace the local ones: an AI answer becomes a note or a *pending* flashcard only when you save it; generated
-packs go through the normal pack check (quotes verified on the real slides, items approved by you); AI marks are saved as
-"AI estimate" and you can change them.
-
-## Exam engine
-
-Selection is seeded (reproducible), filters by lecture/type/difficulty, and aims at the requested marks. MCQ and true/false are marked exactly. Written answers are **self-marked** against a rubric; keyword hits only suggest marks; every written mark is stored as `uncertain`. Attempts autosave on every change and resume after a reload; "exam conditions" removes hints and early answers and keeps the clock running.
+출제는 시드가 있어 다시 만들 수 있고, 강의·종류·난이도로 거르며, 요청한 배점을 목표로 합니다. 객관식과 참거짓은 정확히 채점합니다. 서술형은 채점 기준으로 **스스로 채점**하며, 키워드 일치는 점수 제안일 뿐이고 모든 서술형 점수는 `uncertain`으로 저장합니다. 응시는 바뀔 때마다 자동 저장되어 새로 고침 뒤에도 이어지고, "시험 조건"은 힌트와 미리 보는 답을 없애고 시간을 계속 잽니다.
